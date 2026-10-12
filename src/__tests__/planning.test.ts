@@ -251,35 +251,46 @@ describe('sharing a workout', () => {
 
   it('the text summary reads like a message', async () => {
     const { db } = await withPush()
-    const text = workoutSummaryText(db.getWorkout('w1'))
+    const text = workoutSummaryText(db.getWorkout('w1'), { now: new Date('2026-10-12T12:00:00') })
     expect(text).toBe(
       [
-        'Push — Thu, Sep 24, 2026',
-        'Bench Press (lb): 135 × 10 warm-up, 185 × 5, 185 × 5, 185 → 155 → 135 × 8',
-        'Overhead Press (lb): 95 × 8, 95 × 8',
-        '  (paused reps)',
-        'Running: 25:00, 3 mi, 150 bpm',
+        'Push · Thu Sep 24',
+        '3 exercises · 7 sets',
+        'Weights in lb',
         '',
-        'Notes: felt strong',
+        'Bench Press',
+        'Warm-up 135 × 10',
+        '185 × 5',
+        '185 × 5',
+        '185 × 8, then 155 × 8, then 135 × 8',
+        '',
+        'Overhead Press',
+        '95 × 8',
+        '95 × 8',
+        '(paused reps)',
+        '',
+        'Running',
+        '25 min · 3 mi · 150 bpm',
+        '',
+        'felt strong',
         '',
         'Logged with SplitLog',
-        'https://abelanand.github.io/SplitLog/',
       ].join('\n'),
     )
   })
 
-  it('the summary handles plans, uneven drops, bodyweight and treadmill figures', async () => {
+  it('the summary handles plans, mixed units, bodyweight and treadmill figures', async () => {
     const { db } = await fresh()
     await db.addWorkout(workout('p', { title: 'Legs', is_plan: true, date: '2026-10-20', finished_at: null }))
     await db.addEntry({ entry: entry('e1', 'p', 'x-squat'), exercise: { name: 'Squat', kind: 'strength', trackIncline: false }, sets: [set('s1', 'e1', 1, 225, 5, { set_type: 'drop', drops: [{ weight: 185, reps: 8 }] }), set('s2', 'e1', 2, 100, 5, { unit: 'kg', set_type: 'failure' })] })
     await db.addEntry({ entry: entry('e2', 'p', 'x-pullup', 1), exercise: { name: 'Pull-up', kind: 'strength', trackIncline: false }, sets: [set('s3', 'e2', 1, 0, 12)] })
     await db.addEntry({ entry: entry('e3', 'p', 'x-tread', 2), exercise: { name: 'Treadmill', kind: 'cardio', trackIncline: true }, sets: [set('s4', 'e3', 1, 0, 0, { duration_seconds: 1200, incline: 5, distance_unit: 'mi', extra: { speed: 6 } })] })
-    const lines = workoutSummaryText(db.getWorkout('p')).split('\n')
-    expect(lines[0]).toBe('Legs — planned for Tue, Oct 20, 2026')
-    expect(lines[1]).toBe('Squat: 225 lb × 5 → 185 lb × 8, 100 kg × 5 to failure')
-    expect(lines[2]).toBe('Pull-up: BW × 12')
-    expect(lines[3]).toBe('Treadmill: 20:00, 6 mph, 5% incline')
-    expect(lines.at(-2)).toBe('Logged with SplitLog')
+    const lines = workoutSummaryText(db.getWorkout('p'), { now: new Date('2026-10-12T12:00:00'), link: true }).split('\n')
+    expect(lines.slice(0, 2)).toEqual(['Legs · Planned for Tue Oct 20', '3 exercises · 4 sets'])
+    expect(lines.slice(3, 6)).toEqual(['Squat', '225 lb × 5, then 185 × 8', '100 kg × 5 to failure'])
+    expect(lines.slice(7, 9)).toEqual(['Pull-up', '× 12'])
+    expect(lines.slice(10, 12)).toEqual(['Treadmill', '20 min · 6 mph · 5% incline'])
+    expect(lines.slice(-2)).toEqual(['Logged with SplitLog', 'https://abelanand.github.io/SplitLog/'])
   })
 })
 
