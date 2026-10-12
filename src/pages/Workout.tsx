@@ -11,7 +11,7 @@ import { ExerciseCard, type LastSession } from '../components/ExerciseCard'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { DuplicateSheet } from '../components/DuplicateSheet'
 import { summaryOf } from '../api/optimistic'
-import { shareFromMenu } from '../lib/share-workout'
+import { ShareWorkoutSheet } from '../components/ShareWorkoutSheet'
 import { SessionSheet } from '../components/SessionSheet'
 import { Button, Icon, MenuSheet, Sheet, Spinner } from '../components/ui'
 import { bestByExercise } from '../lib/prs'
@@ -76,6 +76,7 @@ export function WorkoutPage() {
   const [sessionSheet, setSessionSheet] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [duplicate, setDuplicate] = useState(false)
+  const [share, setShare] = useState(false)
   const [gymActive, setGymActive] = useState(false)
 
   useEffect(() => {
@@ -405,7 +406,7 @@ export function WorkoutPage() {
           ...(!plan && !finished && workout.exercises.length > 0 ? [{ label: 'Finish workout', sub: 'Marks it done and stops gym reminders', icon: <Icon.Check />, onClick: finish }] : []),
           ...(finished ? [{ label: 'Resume workout', sub: 'Reopens it; time away is not counted', icon: <Icon.Play />, onClick: reopen }] : []),
           ...(workout.exercises.length > 0 ? [
-            { label: 'Share', sub: 'A file for SplitLog users and a summary for anyone', icon: <Icon.Share />, onClick: () => { shareFromMenu(workout.id) } },
+            { label: 'Share', sub: 'As an image, text, or a SplitLog file', icon: <Icon.Share />, onClick: () => setShare(true) },
             { label: 'Duplicate to days…', sub: 'Plan it again on other days', icon: <Icon.CalendarPlus />, onClick: () => setDuplicate(true) },
           ] : []),
           { label: plan ? 'Delete plan' : 'Delete workout', icon: <Icon.Trash />, danger: true, onClick: () => setConfirmDelete(true) },
@@ -413,6 +414,7 @@ export function WorkoutPage() {
       />
 
       <DuplicateSheet workout={duplicate ? summaryOf(workout) : null} onClose={() => setDuplicate(false)} />
+      <ShareWorkoutSheet workoutId={share ? workout.id : null} onClose={() => setShare(false)} />
 
       <Sheet open={confirmLeave} onClose={() => setConfirmLeave(false)} title="Save your changes?">
         <p className="text-muted text-[14px] mb-4">This {plan ? 'plan' : 'workout'} has changes that haven't been saved.</p>
