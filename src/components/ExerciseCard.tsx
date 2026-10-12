@@ -397,7 +397,7 @@ function Arriving({ loaded, leaving, slotRef, children }: { loaded: React.RefObj
 function SetSlot({ lifted, style, onHold, children }: { lifted: boolean; style?: React.CSSProperties; onHold: (press: { clientX: number; clientY: number }) => void; children: React.ReactNode }) {
   const hold = useLongPress((press) => onHold(press), LONG_PRESS_MS, tap)
   return (
-    <div {...hold} data-keep-keyboard={lifted ? '' : undefined} style={style} className={lifted ? 'rounded-xl bg-surface shadow-lg' : undefined}>
+    <div {...hold} data-keep-keyboard={lifted ? '' : undefined} style={style} className={lifted ? '-mx-2 px-2 py-1 rounded-2xl bg-surface border border-border shadow-xl ring-1 ring-accent/30' : undefined}>
       {children}
     </div>
   )

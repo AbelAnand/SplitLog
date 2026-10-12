@@ -111,7 +111,14 @@ export function applyTheme(id: ThemeId): void {
   }
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', meta.swatch[0])
   if (isNative) {
-    import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: meta.light ? Style.Light : Style.Dark })).catch(() => {})
+    import('@capacitor/status-bar').then(async ({ StatusBar, Style }) => {
+      await StatusBar.setStyle({ style: meta.light ? Style.Light : Style.Dark })
+      // If the system ever lays the web view out below the status bar (seen on one iOS 27 phone),
+      // the strip above it is the plugin's own view, black by default: paint it in the theme's colour
+      // so the clock stays readable, and ask for the overlay again.
+      await StatusBar.setBackgroundColor({ color: meta.swatch[0] }).catch(() => {})
+      await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {})
+    }).catch(() => {})
   }
   emit()
 }

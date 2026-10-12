@@ -182,9 +182,9 @@ export function SettingsPage() {
               <ThemeTile key={t.id} meta={t} active={t.id === theme} onSelect={() => { tap(); saveTheme(t.id) }} onHold={t.custom ? () => setThemeMenu(t.custom!) : undefined} />
             ))}
           </div>
-          <div className="flex gap-2 mt-3">
-            <Button variant="secondary" size="sm" className="flex-1" onClick={createTheme}><Icon.Plus /> Create your own</Button>
-            <Button variant="secondary" size="sm" className="flex-1" onClick={() => { tap(); setImporting(true) }}>Import a theme</Button>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <Button variant="secondary" size="sm" className="flex-1 whitespace-nowrap" onClick={createTheme}><Icon.Plus /> Create your own</Button>
+            <Button variant="secondary" size="sm" className="flex-1 whitespace-nowrap" onClick={() => { tap(); setImporting(true) }}>Import a theme</Button>
           </div>
           {custom.length > 0 && <div className="mt-2 text-[12px] text-muted">Hold one of your themes to edit, share or delete it.</div>}
         </div>
