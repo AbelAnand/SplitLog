@@ -44,6 +44,8 @@ Do not archive after `vite build --mode simtest`: that bundle contains the simul
 | Marketing URL | https://abelanand.github.io/SplitLog/ |
 | Copyright | 2026 Abel Anand |
 
+On 2026-10-13 version 1.1.0 was created in App Store Connect with the text below, and the Support, Marketing and Privacy Policy URLs were moved to the SplitLog site address (1.0 still carried the dead /FitLog/ links). The App Review notes and contact were carried over from 1.0.
+
 **Subtitle** (30 max)
 
 > Private workout & PR tracker
