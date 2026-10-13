@@ -137,7 +137,7 @@ A SQLite file inside the app's own storage on the iPhone. Every batch of changes
 
 - Save a backup: one JSON file holding workouts, sets, notes, plans, exercise library and settings, handed to the share sheet (Save to Files, iCloud Drive, AirDrop, mail).
 - Restore from a file: shows what is in the file before anything changes; merges by id; removes nothing; never adds a workout twice, even one that arrived from a spreadsheet.
-- Export to CSV: one row per set, opens in Numbers, Excel or Google Sheets. SplitLog can restore from this file too.
+- Export a spreadsheet (CSV): one row per set, opens in Numbers, Excel or Google Sheets. For analysis, not a backup; SplitLog can read it back but it holds sets only.
 - Erase everything, after typing a confirmation word.
 - Backup reminder on Home when the last backup is over a month old.
 - Moving to a new iPhone: a phone transfer or iCloud restore normally brings the log along; the backup file is the fallback.
