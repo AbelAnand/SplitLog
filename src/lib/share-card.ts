@@ -9,12 +9,14 @@ import { convert, type Unit } from './units'
  * The picture of a workout: a 1080 × 1350 card (4:5, what Instagram and Messages show best)
  * drawn on an offscreen canvas in the colours of the theme in use. Title and date at the top,
  * one block per exercise with its sets, a totals row, and the SplitLog mark at the foot.
- * When the exercises do not fit, the type is scaled down once, then the list is cut with
- * "+ n more".
+ * When the exercises do not fit, the type is scaled down step by step, then the card grows
+ * taller; only past the tallest card is the list cut with "+ n more".
  */
 
 export const CARD_WIDTH = 1080
 export const CARD_HEIGHT = 1350
+/** A long session makes the card taller, up to this. */
+export const CARD_MAX_HEIGHT = 2700
 
 export interface CardSet {
   text: string
@@ -239,24 +241,67 @@ function drawMark(ctx: CanvasRenderingContext2D, x: number, y: number, size: num
 export function drawWorkoutCard(canvas: HTMLCanvasElement, content: CardContent, c: Colours): void {
   canvas.width = CARD_WIDTH
   canvas.height = CARD_HEIGHT
-  const ctx = canvas.getContext('2d')
+  let ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('No canvas')
   const W = CARD_WIDTH
-  const H = CARD_HEIGHT
   const inner = W - PAD * 2
-
-  ctx.fillStyle = c.bg
-  ctx.fillRect(0, 0, W, H)
   ctx.textBaseline = 'alphabetic'
 
-  // Header: title shrinks until it fits on one line.
+  // Header: title shrinks until it fits on one line. Measured first; drawn once the height is known.
   let titlePx = 92
   ctx.font = font(800, titlePx)
   while (ctx.measureText(content.title).width > inner && titlePx > 56) {
     titlePx -= 4
     ctx.font = font(800, titlePx)
   }
+  const headerBottom = PAD + titlePx * 0.82 + 60 + 40 + 44
+  const markSize = 52
+  const panelPad = 44
+  const panelInner = inner - panelPad * 2
+  const footerGap = 44
+
+  // A short workout gets larger type; a long one is laid out at full size, then smaller, step by
+  // step. When the smallest comfortable type still overflows the 4:5 card, the card grows taller
+  // so every exercise is on it; only past the tallest allowed card is the list cut with "+ n more".
+  let m = metricsAt(1)
+  let laid: LaidBlock[] = []
+  let shown = content.blocks.length
+  const totalsHeight = (mm: Metrics) => mm.set * 1.2 + 36
+  const heightOf = (blocks: LaidBlock[], mm: Metrics, more: boolean, totals: boolean) =>
+    panelPad * 2 + blocks.reduce((h, b) => h + b.height, 0) + Math.max(0, blocks.length - 1) * mm.blockGap + (more ? mm.set * 1.3 + mm.blockGap : 0) + (totals ? totalsHeight(mm) : 0)
+  const baseRoom = CARD_HEIGHT - PAD - markSize - footerGap - headerBottom
+  let fits = false
+  for (const scale of [1.2, 1.1, 1, 0.9]) {
+    m = metricsAt(scale)
+    laid = content.blocks.map((b) => layoutBlock(ctx!, b, m, panelInner))
+    if (heightOf(laid, m, false, true) <= baseRoom) { fits = true; break }
+  }
+  let H = CARD_HEIGHT
+  if (!fits) {
+    const needed = headerBottom + heightOf(laid, m, false, true) + footerGap + markSize + PAD
+    H = Math.min(Math.ceil(needed), CARD_MAX_HEIGHT)
+    canvas.height = H
+    ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('No canvas')
+    ctx.textBaseline = 'alphabetic'
+  }
+  const footerY = H - PAD - markSize
+  const panelMaxBottom = footerY - footerGap
+  const room = panelMaxBottom - headerBottom
+  let withTotals = true
+  if (heightOf(laid, m, false, true) > room) {
+    shown = laid.length
+    while (shown > 1 && heightOf(laid.slice(0, shown), m, true, true) > room) shown--
+    if (heightOf(laid.slice(0, shown), m, true, true) > room) withTotals = false
+  }
+  const visible = laid.slice(0, shown)
+  const more = content.blocks.length - shown
+  const panelHeight = heightOf(visible, m, more > 0, withTotals)
+
+  ctx.fillStyle = c.bg
+  ctx.fillRect(0, 0, W, H)
   let y = PAD + titlePx * 0.82
+  ctx.font = font(800, titlePx)
   ctx.fillStyle = c.text
   ctx.fillText(fit(ctx, content.title, inner), PAD, y)
   y += 60
@@ -267,39 +312,7 @@ export function drawWorkoutCard(canvas: HTMLCanvasElement, content: CardContent,
   ctx.fillStyle = c.accent
   roundRect(ctx, PAD, y, 96, 10, 5)
   ctx.fill()
-  y += 44
-
-  // Footer: the mark and the address sit on the bottom edge; the panel may not reach them.
-  const markSize = 52
-  const footerY = H - PAD - markSize
-  let panelTop = y
-  const panelMaxBottom = footerY - 44
-  const panelPad = 44
-  const panelInner = inner - panelPad * 2
-
-  // A short workout gets larger type; a long one is laid out at full size, then smaller, step by
-  // step. When the smallest type still overflows, the list is cut with "+ n more".
-  let m = metricsAt(1)
-  let laid: LaidBlock[] = []
-  let shown = content.blocks.length
-  const totalsHeight = (mm: Metrics) => mm.set * 1.2 + 36
-  const heightOf = (blocks: LaidBlock[], mm: Metrics, more: boolean, totals: boolean) =>
-    panelPad * 2 + blocks.reduce((h, b) => h + b.height, 0) + Math.max(0, blocks.length - 1) * mm.blockGap + (more ? mm.set * 1.3 + mm.blockGap : 0) + (totals ? totalsHeight(mm) : 0)
-  const room = panelMaxBottom - panelTop
-  for (const scale of [1.2, 1.1, 1, 0.9, 0.8, 0.72]) {
-    m = metricsAt(scale)
-    laid = content.blocks.map((b) => layoutBlock(ctx, b, m, panelInner))
-    if (heightOf(laid, m, false, true) <= room) break
-  }
-  let withTotals = true
-  if (heightOf(laid, m, false, true) > room) {
-    shown = laid.length
-    while (shown > 1 && heightOf(laid.slice(0, shown), m, true, true) > room) shown--
-    if (heightOf(laid.slice(0, shown), m, true, true) > room) withTotals = false
-  }
-  const visible = laid.slice(0, shown)
-  const more = content.blocks.length - shown
-  const panelHeight = heightOf(visible, m, more > 0, withTotals)
+  let panelTop = headerBottom
   // Room to spare goes mostly below the panel, a little above, so the card does not sit top-heavy.
   panelTop += Math.max(0, room - panelHeight) * 0.3
 

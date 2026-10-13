@@ -179,7 +179,7 @@ async function loaded(workoutId: string): Promise<{ w: WorkoutDetail; prs: Set<s
 
 /** "SplitLog - Push - 2026-10-09.png" */
 function imageFilename(title: string, date: string): string {
-  return sharedFilename(title, date).replace(/\.json$/, '.png')
+  return sharedFilename(title, date).replace(/\.(json|splitlog)$/, '.png')
 }
 
 /** The text summary. In a browser without the share API it is copied, without the site address. */

@@ -172,9 +172,9 @@ describe('sharing a workout', () => {
     expect(file.workout_exercises).toHaveLength(3)
     expect(file.sets).toHaveLength(7)
     expect(file.exercises.map((e) => e.name).sort()).toEqual(['Bench Press', 'Overhead Press', 'Running'])
-    expect(sharedFilename('Push', '2026-10-08')).toBe('SplitLog - Push - 2026-10-08.json')
-    expect(sharedFilename('  Legs / "heavy"  ', '2026-10-08')).toBe('SplitLog - Legs heavy - 2026-10-08.json')
-    expect(sharedFilename('', '2026-10-08')).toBe('SplitLog - Workout - 2026-10-08.json')
+    expect(sharedFilename('Push', '2026-10-08')).toBe('SplitLog - Push - 2026-10-08.splitlog')
+    expect(sharedFilename('  Legs / "heavy"  ', '2026-10-08')).toBe('SplitLog - Legs heavy - 2026-10-08.splitlog')
+    expect(sharedFilename('', '2026-10-08')).toBe('SplitLog - Workout - 2026-10-08.splitlog')
     // The ordinary file reader recognises it.
     const read = readImportFile(serializeBackup(file))
     expect(read.kind).toBe('shared')

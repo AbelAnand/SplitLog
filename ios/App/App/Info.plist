@@ -63,7 +63,19 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>SplitLog workout or backup</string>
+			<string>SplitLog workout</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.abelanand.fitlog.workout</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>SplitLog backup</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -72,6 +84,31 @@
 			<array>
 				<string>public.json</string>
 			</array>
+		</dict>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.abelanand.fitlog.workout</string>
+			<key>UTTypeDescription</key>
+			<string>SplitLog workout</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>splitlog</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/vnd.splitlog+json</string>
+				</array>
+			</dict>
 		</dict>
 	</array>
 	<key>CFBundleURLTypes</key>

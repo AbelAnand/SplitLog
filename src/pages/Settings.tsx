@@ -246,7 +246,7 @@ export function SettingsPage() {
         </Row>
         <Row label="Restore from a file" hint="A SplitLog backup or spreadsheet export">
           <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => picker.current?.click()}>Choose file</Button>
-          <input ref={picker} type="file" accept=".json,.csv,application/json,text/csv,text/comma-separated-values,public.json,public.comma-separated-values-text" className="hidden" onChange={(e) => chooseFile(e.target.files?.[0])} aria-label="Choose a backup file" />
+          <input ref={picker} type="file" accept=".json,.csv,.splitlog,application/json,text/csv,text/comma-separated-values,public.json,public.comma-separated-values-text,com.abelanand.fitlog.workout" className="hidden" onChange={(e) => chooseFile(e.target.files?.[0])} aria-label="Choose a backup file" />
         </Row>
         <Row label="Export to CSV" hint={`${rows.length} sets, for spreadsheets`}>
           <Button

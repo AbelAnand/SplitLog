@@ -39,7 +39,7 @@ export function sharedWorkoutFile(db: LocalDb, workoutId: string, now = new Date
 /** "SplitLog - Push - 2026-10-08.json": readable in Messages and Files, safe on every filesystem. */
 export function sharedFilename(title: string, date: string): string {
   const clean = title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40)
-  return `SplitLog - ${clean || 'Workout'} - ${date}.json`
+  return `SplitLog - ${clean || 'Workout'} - ${date}.splitlog`
 }
 
 /** The workout a shared file carries, cleaned; null when the file does not hold the one it names. */

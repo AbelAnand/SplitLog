@@ -7,7 +7,7 @@ import { isNative } from './native'
  * thing done with it; the copy is removed afterwards.
  */
 
-export const isFileUrl = (url: string): boolean => /^file:/i.test(url)
+export const isFileUrl = (url: string): boolean => /^(file|content):/i.test(url)
 
 /** The file's own name, for the preview. */
 export function openedFileName(url: string): string {
