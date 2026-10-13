@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { isNative, setNativeBackground } from './native'
-import { deriveTokens, sameColours, swatchOf, type CustomTheme } from './theme-color'
+import { contrast, deriveTokens, normalizeHex, sameColours, swatchOf, type CustomTheme } from './theme-color'
 import { cleanCustomTheme } from './theme-code'
 import { uuid } from './uuid'
 
@@ -74,6 +74,17 @@ async function prefSet(key: string, value: string): Promise<void> {
 }
 
 /** The picker's view of a custom theme. */
+/**
+ * Whether the clock and system icons should be dark on this background. Decided from the colour
+ * itself, not the theme's light/dark switch, so a custom theme with a dark background and the switch
+ * left on Light still gets a readable status bar.
+ */
+export function darkClock(background: string): boolean {
+  const bg = normalizeHex(background)
+  if (!bg) return false
+  return contrast(bg, '#000000') >= contrast(bg, '#ffffff')
+}
+
 export function customMeta(c: CustomTheme): ThemeMeta {
   return { id: c.id, name: c.name, tagline: c.light ? 'Light, made by you' : 'Dark, made by you', light: c.light, swatch: swatchOf(c), custom: c }
 }
@@ -112,7 +123,8 @@ export function applyTheme(id: ThemeId): void {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', meta.swatch[0])
   if (isNative) {
     import('@capacitor/status-bar').then(async ({ StatusBar, Style }) => {
-      await StatusBar.setStyle({ style: meta.light ? Style.Light : Style.Dark })
+      // Style.Light is a light bar with dark text.
+      await StatusBar.setStyle({ style: darkClock(meta.swatch[0]) ? Style.Light : Style.Dark })
       // If the system ever lays the web view out below the status bar (seen on one iOS 27 phone),
       // the strip above it is the plugin's own view, black by default: paint it in the theme's colour
       // so the clock stays readable, and ask for the overlay again.

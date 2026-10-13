@@ -1,3 +1,4 @@
+import { darkClock } from '../lib/theme'
 import { describe, expect, it } from 'vitest'
 import { accentInk, contrast, contrastWarnings, deriveTokens, mix, normalizeHex, sameColours, type CustomTheme } from '../lib/theme-color'
 import { MAX_THEME_CODE, MAX_THEME_NAME, THEME_CODE_PREFIX, cleanCustomTheme, cleanThemeName, decodeThemeCode, encodeThemeCode, findThemeCode } from '../lib/theme-code'
@@ -148,5 +149,18 @@ describe('theme codes', () => {
     expect(cleanCustomTheme(null)).toBeNull()
     expect(cleanCustomTheme('sunset')).toBeNull()
     expect(cleanCustomTheme({})).toBeNull()
+  })
+})
+
+describe('status bar text colour', () => {
+  it('is dark on light backgrounds and light on dark ones, whatever the theme switch says', () => {
+    expect(darkClock('#f6f7f9')).toBe(true)
+    expect(darkClock('#f4f1ea')).toBe(true)
+    expect(darkClock('#0b0d10')).toBe(false)
+    expect(darkClock('#0b1220')).toBe(false)
+    expect(darkClock('#120b10')).toBe(false)
+    expect(darkClock('#808080')).toBe(true)
+    expect(darkClock('#c6f135')).toBe(true)
+    expect(darkClock('not a colour')).toBe(false)
   })
 })
