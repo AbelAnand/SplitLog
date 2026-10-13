@@ -44,55 +44,60 @@ Do not archive after `vite build --mode simtest`: that bundle contains the simul
 | Marketing URL | https://abelanand.github.io/SplitLog/ |
 | Copyright | 2026 Abel Anand |
 
+**Subtitle** (30 max)
+
+> Private workout & PR tracker
+
 **Promotional text** (170 max)
 
-> A free workout log that stays on your iPhone. No account, no ads, no subscription. Log sets in seconds, see your records, keep your streak.
+> Log sets in seconds. No account, no ads, no subscription. Your workouts stay on your phone.
 
 **Keywords** (100 max)
 
-> workout,gym,log,tracker,lifting,weights,strength,sets,reps,PR,streak,cardio,private,offline,planner
+> workout,gym,log,tracker,lifting,weights,strength,sets,reps,PR,streak,split,cardio,private,offline
 
-**Description**
+**Description** (rewritten 2026-10-13 after feedback that the first one read like a machine wrote it)
 
-> SplitLog is a fast, free workout log that keeps your training on your iPhone. No account, no ads, no subscription, and nothing locked behind a paywall.
+> SplitLog is a workout log with nothing in the way. Open it, tap a title, type weight and reps. No account to make, no ads, no subscription, nothing locked behind a paywall. It works in a basement gym with no signal, because it never needs one.
 >
-> LOG A WORKOUT IN SECONDS
-> • Open the app and start. There is nothing to sign up for.
-> • Every change appears instantly and works without a signal.
-> • Finished workouts and plans open for editing, with Save and Discard so nothing changes by accident.
-> • Fill down, quick fill, and "use last session" so you never retype the same numbers.
-> • Warm-up sets, drop sets, and sets to failure.
-> • Cardio with the figures you care about: time, distance, speed, incline, heart rate, and more.
+> Your log stays on your phone. SplitLog has no server and makes no network requests, so nobody can see your training, including the person who made it. Save a backup file whenever you like and restore it on a new phone. Export a spreadsheet if you want to crunch the numbers yourself.
 >
-> SEE YOUR PROGRESS
-> • Personal records are flagged the moment you hit them.
-> • Charts of your top weight for every exercise.
-> • A weekly streak built around the number of days you choose to train.
+> LOGGING
+> • Warm-ups, drop sets, sets to failure
+> • Fill down, quick fill, and last session's numbers right where you type
+> • Hold and drag to reorder sets
+> • Cardio with the figures you care about: time, distance, speed, incline, heart rate and more
+> • Notes per exercise and per workout
 >
-> PLAN AHEAD
-> • Plan a workout for later and check exercises off on the day.
-> • Pause, resume, and reopen sessions. Log a workout for a past date.
+> PROGRESS
+> • A PR badge the moment you beat your best
+> • Top-weight charts for every exercise
+> • A weekly streak built around the number of days you choose to train
 >
-> MADE FOR iPHONE
-> • Home Screen widgets for your streak and for starting a workout, a Lock Screen widget, and a Lock Screen or Control Center button.
-> • Optional reminders, scheduled on your phone.
-> • Six themes. Pounds or kilograms, miles or kilometres.
+> PLANNING
+> • Plan workouts ahead and check exercises off on the day
+> • Save your split, Push Pull Legs Rest or whatever you run, and fill the calendar with it
+> • Duplicate any workout onto other days
 >
-> PRIVATE BY DESIGN
-> • Your log is stored on your iPhone and is never sent anywhere.
-> • Save a backup file whenever you like, and restore it on a new iPhone.
-> • Export everything to a spreadsheet.
-> • No analytics and no tracking.
+> SHARING
+> • Send a session as a clean image, as text, or as a file a friend can open straight into their calendar
+>
+> MADE FOR IPHONE
+> • Home Screen and Lock Screen widgets, and a Start workout button for Control Center
+> • Reminders that run on your phone, only if you turn them on
+> • Six themes, or make your own and share it as a code
+> • Pounds or kilograms, miles or kilometres
+>
+> Built by one person who uses it every week.
 
 **What's New** (for 1.1.0)
 
-> • Share a workout: a file for SplitLog users and a text summary for anyone.
-> • Duplicate a workout or plan onto other days.
-> • Splits: save your cycle (Push, Pull, Legs, Rest…) and fill the calendar with it.
-> • Make your own themes and share them as a code.
-> • Hold and drag to reorder sets. Add set now starts empty.
-> • The History tab is now Calendar.
-> • Fixed the help, guide and privacy links.
+> Share a workout as an image, as text, or as a file a friend can open in SplitLog.
+> Save your split and fill the calendar with it. Duplicate any workout onto other days.
+> Make your own themes and share them as a code.
+> Hold and drag to reorder sets. Add set now starts empty.
+> The History tab is now Calendar.
+> Fixed the help and privacy links.
 
 **What's New** (for 1.0)
 
