@@ -51,10 +51,17 @@ function setSignature(exerciseName: string, s: StoredSet): string {
   return [exerciseName, s.set_number, s.set_type, round(s.weight), s.unit, s.reps, s.duration_seconds ?? '', round(s.distance), s.distance_unit ?? '', round(s.incline), drops].join('|')
 }
 
-function workoutSignature(w: StoredWorkout, sets: string[]): string {
-  // A workout with no sets is never "the same" as another: there is nothing to compare.
-  if (!sets.length) return `empty:${w.id}`
-  return [w.date, w.title.trim().toLowerCase(), w.is_plan ? 'plan' : '', ...[...sets].sort()].join('\n')
+/**
+ * A fingerprint for "the same workout": same day, same title, same sets. A workout with exercises
+ * but no sets yet (a plan that only names what to do) is compared by its exercise names instead,
+ * so applying a split or duplicating a plan twice onto a day does not double it. A workout with no
+ * exercises at all is never the same as another: there is nothing to compare.
+ */
+function workoutSignature(w: StoredWorkout, sets: string[], exerciseNames: string[] = []): string {
+  const head = [w.date, w.title.trim().toLowerCase(), w.is_plan ? 'plan' : '']
+  if (sets.length) return [...head, ...[...sets].sort()].join('\n')
+  if (exerciseNames.length) return [...head, 'exercises:', ...[...exerciseNames].sort()].join('\n')
+  return `empty:${w.id}`
 }
 
 export class LocalDb {
@@ -326,8 +333,9 @@ export class LocalDb {
 
   private planSignature(copy: PlanCopy): string {
     const exerciseOf = new Map(copy.entries.map((e) => [e.id, e.exercise_id]))
-    const lines = copy.sets.map((s) => setSignature(this.exercises.get(exerciseOf.get(s.workout_exercise_id) ?? '')?.name.toLowerCase() ?? '', s))
-    return workoutSignature({ ...copy.workout, is_plan: true }, lines)
+    const nameOf = (exerciseId: string) => this.exercises.get(exerciseId)?.name.toLowerCase() ?? ''
+    const lines = copy.sets.map((s) => setSignature(nameOf(exerciseOf.get(s.workout_exercise_id) ?? ''), s))
+    return workoutSignature({ ...copy.workout, is_plan: true }, lines, copy.entries.map((e) => nameOf(e.exercise_id)))
   }
 
   setProfile(patch: Partial<StoredProfile>): Promise<void> {
@@ -528,17 +536,25 @@ export class LocalDb {
     const incoming = new Map<string, string>()
     {
       const entryOf = new Map<string, StoredWorkoutExercise>()
-      for (const e of entries) if (e) entryOf.set(e.id, e)
+      const names = new Map<string, string[]>()
+      const nameOf = (exerciseId: string) => exerciseName.get(exerciseId) ?? this.exercises.get(exerciseId)?.name.toLowerCase() ?? ''
+      for (const e of entries) {
+        if (!e) continue
+        entryOf.set(e.id, e)
+        const list = names.get(e.workout_id)
+        if (list) list.push(nameOf(e.exercise_id))
+        else names.set(e.workout_id, [nameOf(e.exercise_id)])
+      }
       const lines = new Map<string, string[]>()
       for (const s of sets) {
         const e = s && entryOf.get(s.workout_exercise_id)
         if (!s || !e) continue
-        const name = exerciseName.get(e.exercise_id) ?? this.exercises.get(e.exercise_id)?.name.toLowerCase() ?? ''
+        const name = nameOf(e.exercise_id)
         const list = lines.get(e.workout_id)
         if (list) list.push(setSignature(name, s))
         else lines.set(e.workout_id, [setSignature(name, s)])
       }
-      for (const w of workouts) if (w) incoming.set(w.id, workoutSignature(w, lines.get(w.id) ?? []))
+      for (const w of workouts) if (w) incoming.set(w.id, workoutSignature(w, lines.get(w.id) ?? [], names.get(w.id) ?? []))
     }
     const here = new Map<string, string[]>()
     for (const [id, signature] of this.signatureById()) {
@@ -610,20 +626,27 @@ export class LocalDb {
    * under another id. `onDate` narrows it to one day.
    */
   private signatureById(onDate?: string): Map<string, string> {
+    const names = new Map<string, string[]>()
+    for (const e of this.entries.values()) {
+      if (onDate && this.workouts.get(e.workout_id)?.date !== onDate) continue
+      const name = this.exercises.get(e.exercise_id)?.name.toLowerCase() ?? ''
+      const list = names.get(e.workout_id)
+      if (list) list.push(name)
+      else names.set(e.workout_id, [name])
+    }
     const lines = new Map<string, string[]>()
     for (const s of this.sets.values()) {
       const e = this.entries.get(s.workout_exercise_id)
-      if (!e) continue
-      if (onDate && this.workouts.get(e.workout_id)?.date !== onDate) continue
+      if (!e || !names.has(e.workout_id)) continue
       const name = this.exercises.get(e.exercise_id)?.name.toLowerCase() ?? ''
       const list = lines.get(e.workout_id)
       if (list) list.push(setSignature(name, s))
       else lines.set(e.workout_id, [setSignature(name, s)])
     }
     const out = new Map<string, string>()
-    for (const [id, list] of lines) {
+    for (const [id, exerciseNames] of names) {
       const w = this.workouts.get(id)
-      if (w) out.set(id, workoutSignature(w, list))
+      if (w) out.set(id, workoutSignature(w, lines.get(id) ?? [], exerciseNames))
     }
     return out
   }
