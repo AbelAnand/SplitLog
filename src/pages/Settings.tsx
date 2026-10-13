@@ -248,7 +248,7 @@ export function SettingsPage() {
           <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => picker.current?.click()}>Choose file</Button>
           <input ref={picker} type="file" accept=".json,.csv,.splitlog,application/json,text/csv,text/comma-separated-values,public.json,public.comma-separated-values-text,com.abelanand.fitlog.workout" className="hidden" onChange={(e) => chooseFile(e.target.files?.[0])} aria-label="Choose a backup file" />
         </Row>
-        <Row label="Export to CSV" hint={`${rows.length} sets, for spreadsheets`}>
+        <Row label="Export a spreadsheet" hint={`${rows.length} sets as CSV, for Numbers or Excel. Not a backup: notes, times, plans and settings are not in it.`}>
           <Button
             variant="secondary"
             size="sm"
