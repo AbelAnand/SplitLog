@@ -19,7 +19,9 @@ export function YearCalendar({
 }) {
   const touch = useRef<{ x: number; y: number } | null>(null)
   const months = Array.from({ length: 12 }, (_, i) => new Date(year, i, 1))
-  const thisYear = new Date().getFullYear()
+  // Forward stops at this year, or at the last year that holds a plan, so a split applied into January can be seen.
+  let lastYear = new Date().getFullYear()
+  for (const d of plannedDates) lastYear = Math.max(lastYear, Number(d.slice(0, 4)) || 0)
   return (
     <div
       className="bg-surface rounded-[22px] border border-border/60 p-4"
@@ -32,7 +34,7 @@ export function YearCalendar({
         const dx = e.changedTouches[0].clientX - s.x
         const dy = e.changedTouches[0].clientY - s.y
         if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return
-        if (dx < 0 && year >= thisYear) return
+        if (dx < 0 && year >= lastYear) return
         tap()
         onYearChange(year + (dx < 0 ? 1 : -1))
       }}
@@ -46,7 +48,7 @@ export function YearCalendar({
           type="button"
           aria-label="Next year"
           className="h-10 w-10 -mr-2 flex items-center justify-center text-muted disabled:opacity-30"
-          disabled={year >= thisYear}
+          disabled={year >= lastYear}
           onClick={() => onYearChange(year + 1)}
         >
           <Icon.ChevronRight />
@@ -63,7 +65,7 @@ export function YearCalendar({
               key={m.toISOString()}
               type="button"
               onClick={() => { tap(); onPickMonth(m) }}
-              className="press-soft text-left rounded-xl -m-1 p-1 active:bg-surface-2"
+              className="press-soft self-start text-left rounded-xl -m-1 p-1 active:bg-surface-2"
               aria-label={`${format(m, 'MMMM yyyy')}, ${trainedCount} ${trainedCount === 1 ? 'day' : 'days'} trained`}
             >
               <div className="flex h-4 items-center justify-between mb-1.5">

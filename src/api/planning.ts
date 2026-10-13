@@ -3,7 +3,7 @@ import { db } from '../db'
 import type { PlanCopy } from '../db/db'
 import type { StoredSplit } from '../db/types'
 import { uuid } from '../lib/uuid'
-import { cyclePosition, dayKey, plansForSplit, planFromWorkout, type PlanIds } from '../lib/splits'
+import { appliedRange, plansForSplit, planFromWorkout, type PlanIds } from '../lib/splits'
 import { invalidateAll } from './mutations'
 import { keys } from './keys'
 import type { WorkoutSummary } from './types'
@@ -139,19 +139,10 @@ export function useApplySplit() {
       const split = db.getSplit(input.splitId)
       const copies = plansForSplit(split, input.from, input.through, input.startIndex, ids, nowIso())
       const result = await add.mutateAsync(copies)
-      // The cycle's reference start stays put when extending, so positions keep lining up.
-      const continues = split.applied_from && split.applied_through && input.from > split.applied_through && cyclePosition(split, input.from) === input.startIndex
-      await mark.mutateAsync({ id: split.id, from: continues ? split.applied_from! : offsetStart(input.from, input.startIndex, split.days.length), through: input.through })
+      // The cycle's reference start stays put when the fill is in step, so positions keep lining up.
+      await mark.mutateAsync({ id: split.id, ...appliedRange(split, input) })
       return result
     },
     isPending: add.isPending || mark.isPending,
   }
-}
-
-/** The date on which day 0 of the cycle would have fallen, so later Extends compute positions from it. */
-function offsetStart(from: string, startIndex: number, cycleLength: number): string {
-  if (!cycleLength || !startIndex) return from
-  const d = new Date(`${from}T12:00:00`)
-  d.setDate(d.getDate() - startIndex)
-  return dayKey(d)
 }

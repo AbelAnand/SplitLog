@@ -29,9 +29,17 @@ export function HistoryPage() {
 
   const yearWorkouts = useMemo(() => workouts.filter((w) => isSameYear(parseISO(w.date), month)), [workouts, month])
   const yearDays = useMemo(() => new Set(yearWorkouts.map((w) => w.date)).size, [yearWorkouts])
+  // Plans are not workouts until they are started, so the month counts them apart.
+  const monthCounts = useMemo(() => {
+    const done = list.filter((w) => !w.is_plan).length
+    const planned = list.length - done
+    const parts = done || !planned ? [`${done} ${done === 1 ? 'workout' : 'workouts'}`] : []
+    if (planned) parts.push(`${planned} planned`)
+    return parts.join(' · ')
+  }, [list])
   const heading = view === 'year'
     ? `${format(month, 'yyyy')} · ${yearWorkouts.length} ${yearWorkouts.length === 1 ? 'workout' : 'workouts'}${yearDays && yearDays !== yearWorkouts.length ? ` on ${yearDays} days` : ''}`
-    : selected ? format(selected, 'EEEE, MMM d') : `${format(month, 'MMMM')} · ${list.length} ${list.length === 1 ? 'workout' : 'workouts'}`
+    : selected ? format(selected, 'EEEE, MMM d') : `${format(month, 'MMMM')} · ${monthCounts}`
 
   return (
     <>
