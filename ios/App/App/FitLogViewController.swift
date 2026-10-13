@@ -21,6 +21,12 @@ class FitLogViewController: CAPBridgeViewController {
             webView.allowsBackForwardNavigationGestures = true
             // Dragging the page pulls the keyboard down with it.
             webView.scrollView.keyboardDismissMode = .interactive
+            // iOS 26 draws a glass strip under the status bar in the web view's native background
+            // colour, which hid the clock on every theme. The page paints that area itself.
+            if #available(iOS 26.0, *) {
+                webView.scrollView.topEdgeEffect.isHidden = true
+                webView.scrollView.bottomEdgeEffect.isHidden = true
+            }
         }
 
         #if DEBUG

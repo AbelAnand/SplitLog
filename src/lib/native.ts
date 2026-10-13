@@ -30,7 +30,13 @@ export async function initNative(): Promise<void> {
   }
 }
 
-const BackGesture = registerPlugin<{ setEnabled(options: { enabled: boolean }): Promise<void> }>('BackGesture')
+const BackGesture = registerPlugin<{ setEnabled(options: { enabled: boolean }): Promise<void>; setBackground(options: { color: string }): Promise<void> }>('BackGesture')
+
+/** iPhone: paint the native views behind the web view (overscroll, the strip under the status bar) in the theme's background colour. */
+export async function setNativeBackground(color: string): Promise<void> {
+  if (!isIOS) return
+  await BackGesture.setBackground({ color }).catch(() => {})
+}
 
 /**
  * Switch going back by gesture on or off (off while a screen has unsaved changes).

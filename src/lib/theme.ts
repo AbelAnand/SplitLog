@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { isNative } from './native'
+import { isNative, setNativeBackground } from './native'
 import { deriveTokens, sameColours, swatchOf, type CustomTheme } from './theme-color'
 import { cleanCustomTheme } from './theme-code'
 import { uuid } from './uuid'
@@ -118,6 +118,7 @@ export function applyTheme(id: ThemeId): void {
       // so the clock stays readable, and ask for the overlay again.
       await StatusBar.setBackgroundColor({ color: meta.swatch[0] }).catch(() => {})
       await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {})
+      await setNativeBackground(meta.swatch[0])
     }).catch(() => {})
   }
   emit()
