@@ -15,6 +15,7 @@ import { ShareWorkoutSheet } from '../components/ShareWorkoutSheet'
 import { SessionSheet } from '../components/SessionSheet'
 import { Button, Icon, MenuSheet, Sheet, Spinner } from '../components/ui'
 import { bestByExercise } from '../lib/prs'
+import { loggedSets } from '../lib/sets'
 import { formatClock, formatSessionLength, isLiveSession, useElapsed } from '../lib/duration'
 import { isNative, setBackGesture } from '../lib/native'
 import { getGymSession, loadReminderSettings, startGymSession, stopGymSession } from '../lib/notifications'
@@ -97,7 +98,11 @@ export function WorkoutPage() {
   const timers = useRef<{ title?: number; notes?: number }>({})
   const debounced = (key: 'title' | 'notes', value: string) => {
     if (timers.current[key]) window.clearTimeout(timers.current[key])
-    timers.current[key] = window.setTimeout(() => updateWorkout.mutate({ [key]: value }), 500)
+    timers.current[key] = window.setTimeout(() => {
+      // Forgotten once it has run, or leaving would write the same value again and count it as unsaved.
+      timers.current[key] = undefined
+      updateWorkout.mutate({ [key]: value })
+    }, 500)
   }
   /** Commit what is still being typed (fields commit a moment after the last keystroke) and let it register. */
   const settleEdits = async () => {
@@ -159,8 +164,9 @@ export function WorkoutPage() {
       if (!candidates.length) continue
       const latestDate = candidates.map((r) => r.date).sort().at(-1)!
       const latestWorkout = candidates.filter((r) => r.date === latestDate).sort((a, b) => b.created_at.localeCompare(a.created_at))[0].workout_id
-      const sets = candidates.filter((r) => r.workout_id === latestWorkout).sort((a, b) => a.set_number - b.set_number)
-      map.set(we.id, { date: format(parseISO(latestDate), 'MMM d'), sets })
+      // Rows left empty last time are not numbers to repeat; a session of only empty rows gives no hint.
+      const sets = loggedSets(candidates.filter((r) => r.workout_id === latestWorkout), we.kind === 'cardio').sort((a, b) => a.set_number - b.set_number)
+      if (sets.length) map.set(we.id, { date: format(parseISO(latestDate), 'MMM d'), sets })
     }
     return map
   }, [allSets, workout, id])

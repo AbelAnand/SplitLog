@@ -4,7 +4,7 @@ import type { NewSet } from '../api/mutations'
 import { moveItem } from '../api/optimistic'
 import { celebrate, tap } from '../lib/haptics'
 import { useArrivals, useArrived, useLeaving } from '../lib/motion'
-import { blankSet, isBlank } from '../lib/sets'
+import { blankSet, isBlank, matchHints, parseReps, parseWeight, repsText, seedDrop, weightText } from '../lib/sets'
 import { LONG_PRESS_MS, useLongPress } from '../lib/useLongPress'
 import { useReorder } from '../lib/useReorder'
 import { convert, convertDistance, formatDistance, formatDuration, formatPace, formatWeight, parseDuration, stepFor, toKg, type DistanceUnit, type Unit } from '../lib/units'
@@ -20,12 +20,6 @@ export interface LastSession {
   sets: LastSet[]
 }
 export type LastSet = Pick<SetDetail, 'weight' | 'unit' | 'reps' | 'set_type' | 'duration_seconds' | 'distance' | 'distance_unit' | 'drops' | 'incline' | 'extra'>
-
-/** A sensible first drop: ~80% of the weight, rounded to a plate. */
-function seedDrop(weight: number, reps: number, unit: Unit): Drop {
-  const step = stepFor(unit)
-  return { weight: Math.max(step, Math.round((weight * 0.8) / step) * step), reps: reps || 8 }
-}
 
 const TYPE_LABEL: Record<SetType, string> = { warmup: 'Warm-up', working: 'Working', drop: 'Drop set', failure: 'To failure' }
 const TYPE_SHORT: Record<SetType, string> = { warmup: 'W', working: '', drop: 'D', failure: 'F' }
@@ -149,6 +143,9 @@ export function ExerciseCard({
   }, [we.sets])
 
   const lastSet = we.sets.at(-1)
+
+  // Last time's numbers for each row: warm-ups against warm-ups, working sets against working sets.
+  const hints = useMemo(() => matchHints(we.sets, last?.sets), [we.sets, last])
 
   /** Change one set, and fill the same field down into untouched sets below it. */
   const changeSet = (set: SetDetail, patch: SetPatch) => {
@@ -282,9 +279,9 @@ export function ExerciseCard({
           <Arriving key={s.id} loaded={arrivals} leaving={leaving.has(s.id)} slotRef={reorder.slotRef(s.id)}>
             <SetSlot lifted={reorder.lifted === i} style={reorder.styleFor(i)} onHold={(press) => reorder.lift(i, press)}>
               {cardio ? (
-                <CardioRow set={s} hint={last?.sets[i]} label={numbers[i]} metrics={metrics} distanceUnit={distanceUnit} onChange={(p) => changeSet(s, p)} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
+                <CardioRow set={s} hint={hints[i]} label={numbers[i]} metrics={metrics} distanceUnit={distanceUnit} onChange={(p) => changeSet(s, p)} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
               ) : (
-                <StrengthRow set={s} hint={last?.sets[i]} label={numbers[i]} unit={unit} isPr={s.id === prSetId} onChange={(p) => changeSet(s, p)} onDrops={(drops) => onUpdateSets([{ setId: s.id, patch: { drops } }])} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
+                <StrengthRow set={s} hint={hints[i]} label={numbers[i]} unit={unit} isPr={s.id === prSetId} onChange={(p) => changeSet(s, p)} onDrops={(drops) => onUpdateSets([{ setId: s.id, patch: { drops } }])} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
               )}
             </SetSlot>
           </Arriving>
@@ -419,31 +416,47 @@ function Badge({ label, type, isPr, onClick }: { label: string; type: SetType; i
   )
 }
 
-function useLocalField(serverValue: string, commit: (v: string) => void, delay = 400) {
+/**
+ * A number field that keeps what is being typed and commits it a moment after the last keystroke
+ * (or on blur). What is stored can change under the field (fill-down, Use last, Discard) and the
+ * field then shows it, except while the field is being typed in: showing "100" the moment "100."
+ * is committed would turn the next keystroke into "1005". On blur the text is tidied by `tidy`,
+ * the same way the stored value would be shown.
+ */
+function useLocalField(serverValue: string, commit: (v: string) => void, tidy: (v: string) => string, delay = 400) {
   const [v, setV] = useState(serverValue)
   const dirty = useRef(false)
+  const focused = useRef(false)
   const timer = useRef<number | null>(null)
   useEffect(() => {
-    if (!dirty.current) setV(serverValue)
+    if (!dirty.current && !focused.current) setV(serverValue)
   }, [serverValue])
   const onChange = (next: string) => {
     dirty.current = true
     setV(next)
     if (timer.current) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
+      timer.current = null
       commit(next)
       dirty.current = false
     }, delay)
   }
-  const flush = () => {
+  const onFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    focused.current = true
+    e.target.select()
+  }
+  const onBlur = () => {
+    // Only a commit still waiting runs here: committing again would fill a set added since.
     if (timer.current) {
       window.clearTimeout(timer.current)
       timer.current = null
       commit(v)
       dirty.current = false
     }
+    focused.current = false
+    setV(tidy(v))
   }
-  return { v, onChange, flush }
+  return { v, onChange, onFocus, onBlur }
 }
 
 /** The same set from the last session, shown as ghost text in an empty field. */
@@ -451,8 +464,8 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
   const displayWeight = set.unit === unit ? set.weight : convert(set.weight, set.unit, unit)
   const hintWeight = hint?.weight ? formatWeight(convert(hint.weight, hint.unit, unit)) : '0'
   const hintReps = hint?.reps ? String(hint.reps) : '0'
-  const w = useLocalField(displayWeight ? formatWeight(displayWeight) : '', (s) => onChange({ weight: Math.min(99999, Math.max(0, parseFloat(s.replace(',', '.')) || 0)), unit }))
-  const r = useLocalField(set.reps ? String(set.reps) : '', (s) => onChange({ reps: Math.min(LIMITS.reps, Math.max(0, parseInt(s, 10) || 0)) }))
+  const w = useLocalField(weightText(displayWeight), (s) => onChange({ weight: parseWeight(s), unit }), (s) => weightText(parseWeight(s)))
+  const r = useLocalField(repsText(set.reps), (s) => onChange({ reps: parseReps(s) }), (s) => repsText(parseReps(s)))
   const isDrop = set.set_type === 'drop'
   return (
     <div className="flex flex-col gap-1.5">
@@ -460,11 +473,11 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
       <div className="grid grid-cols-[40px_1fr_1fr_44px] gap-2 items-center bg-surface">
         <Badge label={label} type={set.set_type} isPr={isPr} onClick={onMenu} />
         <div className="relative @container">
-          <input className={`${inputClass} ${isPr ? 'ring-1 ring-inset ring-pr/70' : ''}`} inputMode="decimal" placeholder={hintWeight} onPointerDown={stopHold} value={w.v} onFocus={(e) => e.target.select()} onBlur={w.flush} onChange={(e) => w.onChange(e.target.value)} aria-label={`Set ${label} weight`} />
+          <input className={`${inputClass} ${isPr ? 'ring-1 ring-inset ring-pr/70' : ''}`} inputMode="decimal" placeholder={hintWeight} onPointerDown={stopHold} value={w.v} onFocus={w.onFocus} onBlur={w.onBlur} onChange={(e) => w.onChange(e.target.value)} aria-label={`Set ${label} weight`} />
           {/* A long number needs the room, so the badge gives up its letters. */}
           {isPr && <PrBadge compact={w.v.length > 3} className="absolute top-0 right-0 pointer-events-none" />}
         </div>
-        <input className={inputClass} inputMode="numeric" placeholder={hintReps} onPointerDown={stopHold} value={r.v} onFocus={(e) => e.target.select()} onBlur={r.flush} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`Set ${label} reps`} />
+        <input className={inputClass} inputMode="numeric" placeholder={hintReps} onPointerDown={stopHold} value={r.v} onFocus={r.onFocus} onBlur={r.onBlur} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`Set ${label} reps`} />
         <button type="button" aria-label="Set options" onClick={() => { tap(); onMenu() }} className="press h-11 w-11 flex items-center justify-center text-faint active:text-text">
           <Icon.More />
         </button>
@@ -487,7 +500,8 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
             type="button"
             onClick={() => {
               tap()
-              const prev = set.drops.at(-1) ?? { weight: set.weight, reps: set.reps }
+              // Step down from the last drop that has a weight, else from the set itself.
+              const prev = [...set.drops].reverse().find((d) => d.weight) ?? { weight: set.weight, reps: set.reps }
               onDrops([...set.drops, seedDrop(prev.weight, prev.reps, set.unit)])
             }}
             className="self-start h-8 px-2 -ml-1 text-[13px] font-medium text-accent"
@@ -503,14 +517,14 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
 /** One weight-drop inside a drop set. Values are stored in the parent set's unit. */
 function DropRow({ drop, unit, displayUnit, label, onChange, onRemove }: { drop: Drop; unit: Unit; displayUnit: Unit; label: string; onChange: (d: Drop) => void; onRemove: () => void }) {
   const shown = convert(drop.weight, unit, displayUnit)
-  const w = useLocalField(shown ? formatWeight(shown) : '', (s) => onChange({ ...drop, weight: Math.max(0, convert(parseFloat(s.replace(',', '.')) || 0, displayUnit, unit)) }))
-  const r = useLocalField(drop.reps ? String(drop.reps) : '', (s) => onChange({ ...drop, reps: Math.max(0, parseInt(s, 10) || 0) }))
+  const w = useLocalField(weightText(shown), (s) => onChange({ ...drop, weight: convert(parseWeight(s), displayUnit, unit) }), (s) => weightText(parseWeight(s)))
+  const r = useLocalField(repsText(drop.reps), (s) => onChange({ ...drop, reps: parseReps(s) }), (s) => repsText(parseReps(s)))
   const small = 'h-9 w-full rounded-lg bg-surface-2 border border-border/60 text-center text-[15px] font-semibold tabular outline-none focus:border-accent/70 placeholder:text-faint placeholder:font-normal'
   return (
     <div className="row-in grid grid-cols-[16px_1fr_1fr_36px] gap-2 items-center">
       <span className="text-faint text-[13px]">↓</span>
-      <input className={small} inputMode="decimal" placeholder="0" onPointerDown={stopHold} value={w.v} onFocus={(e) => e.target.select()} onBlur={w.flush} onChange={(e) => w.onChange(e.target.value)} aria-label={`${label} weight`} />
-      <input className={small} inputMode="numeric" placeholder="0" onPointerDown={stopHold} value={r.v} onFocus={(e) => e.target.select()} onBlur={r.flush} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`${label} reps`} />
+      <input className={small} inputMode="decimal" placeholder="0" onPointerDown={stopHold} value={w.v} onFocus={w.onFocus} onBlur={w.onBlur} onChange={(e) => w.onChange(e.target.value)} aria-label={`${label} weight`} />
+      <input className={small} inputMode="numeric" placeholder="0" onPointerDown={stopHold} value={r.v} onFocus={r.onFocus} onBlur={r.onBlur} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`${label} reps`} />
       <button type="button" aria-label={`Remove ${label}`} onClick={() => { tap(); onRemove() }} className="h-9 w-9 flex items-center justify-center text-faint active:text-danger"><Icon.X /></button>
     </div>
   )
@@ -535,7 +549,11 @@ function CardioRow({ set, hint, label, metrics, distanceUnit, onChange, onMenu, 
 function MetricInput({ set, hint, k, distanceUnit, label, onChange }: { set: SetDetail; hint?: LastSet; k: MetricKey; distanceUnit: DistanceUnit; label: string; onChange: (p: SetPatch) => void }) {
   const def = METRIC_BY_KEY[k]
   const placeholder = (hint && metricText(hint, k, distanceUnit)) || def.placeholder
-  const f = useLocalField(metricText(set, k, distanceUnit), (text) => onChange(metricPatch(k, text, distanceUnit, set)))
+  const f = useLocalField(
+    metricText(set, k, distanceUnit),
+    (text) => onChange(metricPatch(k, text, distanceUnit, set)),
+    (text) => metricText({ ...set, ...metricPatch(k, text, distanceUnit, set) }, k, distanceUnit),
+  )
   const clean = (v: string) => (k === 'time' ? v.replace(/[^\d:hms]/gi, '') : v)
   return (
     <input
@@ -544,8 +562,8 @@ function MetricInput({ set, hint, k, distanceUnit, label, onChange }: { set: Set
       placeholder={placeholder}
       value={f.v}
       onPointerDown={stopHold}
-      onFocus={(e) => e.target.select()}
-      onBlur={f.flush}
+      onFocus={f.onFocus}
+      onBlur={f.onBlur}
       onChange={(e) => f.onChange(clean(e.target.value))}
       aria-label={label}
     />
