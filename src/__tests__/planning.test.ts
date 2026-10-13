@@ -6,7 +6,7 @@ import { parseBackup, readImportFile, serializeBackup } from '../db/backup'
 import { sharedAsImport, sharedFilename, sharedWorkoutFile, sharedWorkoutOf } from '../db/share'
 import type { SplitDay, StoredSet, StoredSplit, StoredWorkout, StoredWorkoutExercise } from '../db/types'
 import { LIMITS } from '../data/limits'
-import { cyclePosition, expandCycle, fillEnd, MAX_FILL_DAYS, nextFillDate, planFromWorkout, plansForSplit, templateFromWorkout, type PlanIds } from '../lib/splits'
+import { appliedRange, cyclePosition, expandCycle, fillEnd, MAX_FILL_DAYS, nextFillDate, offsetStart, planFromWorkout, plansForSplit, templateFromWorkout, type PlanIds } from '../lib/splits'
 import { workoutSummaryText } from '../lib/share-workout'
 
 const at = '2026-09-24T10:00:00.000Z'
@@ -78,6 +78,30 @@ describe('a split as a rolling cycle', () => {
     expect(cyclePosition(split, '2026-11-05')).toBe(0)
     expect(cyclePosition({ days: ppl, applied_from: null }, '2026-11-05')).toBe(0)
     expect(fillEnd('2026-11-01', 2)).toBe('2026-11-14')
+  })
+
+  it('keeps the cycle across a month boundary and the end of daylight saving time', () => {
+    // 1 Nov 2026 is when clocks go back in the US; a calendar-day walk must not double or skip a day.
+    const out = expandCycle(ppl, '2026-10-29', '2026-11-04')
+    expect(out.map((e) => `${e.date}:${e.index}`)).toEqual(['2026-10-29:0', '2026-10-30:1', '2026-10-31:2', '2026-11-02:0', '2026-11-03:1', '2026-11-04:2'])
+    expect(cyclePosition({ days: ppl, applied_from: '2026-10-29' }, '2026-11-02')).toBe(0)
+    expect(cyclePosition({ days: ppl, applied_from: '2026-10-29' }, '2027-01-01')).toBe(64 % 4)
+    expect(offsetStart('2026-11-01', 2, 4)).toBe('2026-10-30')
+    expect(offsetStart('2026-11-01', 0, 4)).toBe('2026-11-01')
+  })
+
+  it('notes how far it is filled without ever shrinking the record', () => {
+    const fresh = { days: ppl, applied_from: null, applied_through: null }
+    // A first fill starting on day 2 (Legs) records where day 0 would have been.
+    expect(appliedRange(fresh, { from: '2026-11-01', through: '2026-11-28', startIndex: 2 })).toEqual({ from: '2026-10-30', through: '2026-11-28' })
+    const filled = { days: ppl, applied_from: '2026-10-13', applied_through: '2026-11-09' }
+    // Extend from the next day, in step: the reference start stays and the range grows.
+    expect(appliedRange(filled, { from: '2026-11-10', through: '2026-11-30', startIndex: cyclePosition(filled, '2026-11-10') })).toEqual({ from: '2026-10-13', through: '2026-11-30' })
+    // Apply again from today inside the filled range, in step: "Filled to" keeps the later date.
+    const extended = { days: ppl, applied_from: '2026-10-13', applied_through: '2026-11-30' }
+    expect(appliedRange(extended, { from: '2026-10-13', through: '2026-11-09', startIndex: 0 })).toEqual({ from: '2026-10-13', through: '2026-11-30' })
+    // A new alignment (Pull on a day that was Push) starts the record afresh, as the plans no longer line up.
+    expect(appliedRange(extended, { from: '2026-10-13', through: '2026-11-09', startIndex: 1 })).toEqual({ from: '2026-10-12', through: '2026-11-09' })
   })
 
   it('makes one plan per workout day, with copies of the target sets and nothing from the session', () => {

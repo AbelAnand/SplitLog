@@ -52,6 +52,24 @@ export function cyclePosition(split: Pick<StoredSplit, 'days' | 'applied_from'>,
   return ((differenceInCalendarDays(parseISO(date), parseISO(split.applied_from)) % n) + n) % n
 }
 
+/** The date on which day 0 of the cycle would have fallen, so later Extends compute positions from it. */
+export function offsetStart(from: string, startIndex: number, cycleLength: number): string {
+  if (!cycleLength || !startIndex) return from
+  return dayKey(addDays(parseISO(from), -startIndex))
+}
+
+/**
+ * How far a split is noted as applied after filling `from` to `through` with day `startIndex`
+ * on `from`. A fill in step with the cycle already on the calendar keeps its reference start and
+ * only ever grows the filled range, so re-applying inside it does not shorten "Filled to"; a fill
+ * with a new alignment starts the record afresh.
+ */
+export function appliedRange(split: Pick<StoredSplit, 'days' | 'applied_from' | 'applied_through'>, input: { from: string; through: string; startIndex: number }): { from: string; through: string } {
+  const inStep = !!split.applied_from && !!split.applied_through && cyclePosition(split, input.from) === input.startIndex
+  if (inStep) return { from: split.applied_from!, through: input.through > split.applied_through! ? input.through : split.applied_through! }
+  return { from: offsetStart(input.from, input.startIndex, split.days.length), through: input.through }
+}
+
 /** The day after the split was last filled to, or today when it has never been applied. */
 export function nextFillDate(split: Pick<StoredSplit, 'applied_through'>, today: string): string {
   if (!split.applied_through) return today
