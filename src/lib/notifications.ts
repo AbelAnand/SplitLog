@@ -105,12 +105,14 @@ export interface GymSession { workoutId: string; title: string; startedAt: numbe
 /** Start soft nudges for an in-progress workout. */
 export async function startGymSession(workoutId: string, title: string): Promise<void> {
   const store = await kv()
-  const session: GymSession = { workoutId, title, startedAt: Date.now() }
-  await store.set(GYM_KEY, JSON.stringify(session))
+  // The session is recorded only once reminders will really be scheduled, so a refused permission
+  // or the setting being off never leaves a phantom session behind.
   if (!isNative) return
   const s = await loadReminderSettings()
-  if (!s.gymEnabled) return
-  if (!(await requestNotificationPermission())) return
+  if (!s.gymEnabled) { await store.remove(GYM_KEY).catch(() => {}); return }
+  if (!(await requestNotificationPermission())) { await store.remove(GYM_KEY).catch(() => {}); return }
+  const session: GymSession = { workoutId, title, startedAt: Date.now() }
+  await store.set(GYM_KEY, JSON.stringify(session))
   const { LocalNotifications } = await import('@capacitor/local-notifications')
   await LocalNotifications.cancel({ notifications: GYM_IDS.map((id) => ({ id })) }).catch(() => {})
   const bodies = [
