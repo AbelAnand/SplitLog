@@ -213,7 +213,7 @@ describe('sharing a workout', () => {
   it('writes a one-workout backup file with a marker and a readable name', async () => {
     const { db } = await withPush()
     const file = sharedWorkoutFile(db, 'w1', new Date('2026-10-08T12:00:00Z'))
-    expect(file).toMatchObject({ app: 'FitLog', format: 2, shared: { kind: 'workout', workout_id: 'w1' }, splits: [] })
+    expect(file).toMatchObject({ app: 'SplitLog', format: 2, shared: { kind: 'workout', workout_id: 'w1' }, splits: [] })
     expect(file.workouts.map((w) => w.id)).toEqual(['w1'])
     expect(file.workout_exercises).toHaveLength(3)
     expect(file.sets).toHaveLength(7)

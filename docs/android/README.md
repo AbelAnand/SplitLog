@@ -266,7 +266,7 @@ Debug build, driven through the `FITLOG_ROUTE` / `FITLOG_JS` hooks and `adb shel
 - Back gesture: live workout → Home; Home → launcher (app backgrounded, restored on relaunch);
   finished workout with an unsaved edit → "Save your changes?"; back again closes it; Discard
   returns Home with the set unchanged.
-- Save a backup: the share sheet opens with `fitlog-backup-<date>.json`; dismissing it reports
+- Save a backup: the share sheet opens with `splitlog-backup-<date>.json`; dismissing it reports
   `cancelled` (no "Backup saved" toast).
 - Restore: Choose file opens the system picker; a `.json` is selectable; the preview sheet shows
   the counts; Restore imports 33 workouts and 495 sets.

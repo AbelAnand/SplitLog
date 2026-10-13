@@ -23,7 +23,7 @@ export function sharedWorkoutFile(db: LocalDb, workoutId: string, now = new Date
     if (!used.has(we.exercise_id)) used.set(we.exercise_id, { id: we.exercise_id, name: we.name, kind: we.kind, track_incline: we.track_incline, metrics: we.kind === 'cardio' ? we.metrics : null, created_at: w.created_at })
   }
   return {
-    app: 'FitLog',
+    app: 'SplitLog',
     format: BACKUP_FORMAT,
     exportedAt: now.toISOString(),
     profile: db.profile(),

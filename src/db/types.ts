@@ -123,7 +123,7 @@ export interface SharedMarker {
  * files are still read (they simply have none). A shared workout is the same file with `shared`.
  */
 export interface BackupFile {
-  app: 'FitLog'
+  app: 'SplitLog' | 'FitLog'
   format: 2
   exportedAt: string
   profile: StoredProfile

@@ -477,7 +477,7 @@ export class LocalDb {
   exportAll(now = new Date()): BackupFile {
     const byCreated = <T extends { created_at: string; id: string }>(a: T, b: T) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
     return {
-      app: 'FitLog',
+      app: 'SplitLog',
       format: BACKUP_FORMAT,
       exportedAt: now.toISOString(),
       profile: this.profile(),

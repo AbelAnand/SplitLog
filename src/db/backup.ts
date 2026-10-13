@@ -12,7 +12,7 @@ export const MAX_FILE_BYTES = 40 * 1024 * 1024
 const MAX_RECORDS = 400_000
 
 export function backupFilename(now = new Date()): string {
-  return `fitlog-backup-${now.toISOString().slice(0, 10)}.json`
+  return `splitlog-backup-${now.toISOString().slice(0, 10)}.json`
 }
 
 export function serializeBackup(file: BackupFile): string {
@@ -35,12 +35,13 @@ export function parseBackup(text: string): BackupFile {
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new UnreadableFile('This file is not a SplitLog backup.')
   const r = raw as Record<string, unknown>
-  if (r.app !== 'FitLog') throw new UnreadableFile('This file is not a SplitLog backup.')
+  // Files written before the rename say FitLog; both are ours.
+  if (r.app !== 'SplitLog' && r.app !== 'FitLog') throw new UnreadableFile('This file is not a SplitLog backup.')
   // Format 1 (before splits) is the same file without `splits`; anything newer is refused.
   if (r.format !== 1 && r.format !== BACKUP_FORMAT) throw new UnreadableFile('This backup was made by a newer version of SplitLog. Update the app, then try again.')
   // Records are checked one by one when they are imported; here only the outline is.
   return {
-    app: 'FitLog',
+    app: 'SplitLog',
     format: BACKUP_FORMAT,
     exportedAt: typeof r.exportedAt === 'string' ? r.exportedAt : '',
     profile: r.profile ? cleanProfile(r.profile) : DEFAULT_PROFILE,
@@ -218,7 +219,7 @@ export function parseCsv(text: string): BackupFile {
     exercise.track_incline = exercise.metrics.includes('incline')
   }
 
-  return { app: 'FitLog', format: BACKUP_FORMAT, exportedAt: '', profile: DEFAULT_PROFILE, exercises: [...exercises.values()], workouts: [...workouts.values()], workout_exercises: [...entries.values()], sets, splits: [] }
+  return { app: 'SplitLog', format: BACKUP_FORMAT, exportedAt: '', profile: DEFAULT_PROFILE, exercises: [...exercises.values()], workouts: [...workouts.values()], workout_exercises: [...entries.values()], sets, splits: [] }
 }
 
 /**

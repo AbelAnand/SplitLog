@@ -254,7 +254,7 @@ export function SettingsPage() {
             size="sm"
             disabled={!rows.length}
             onClick={async () => {
-              const result = await exportCsv(`fitlog-${new Date().toISOString().slice(0, 10)}.csv`, setsToCsv(rows))
+              const result = await exportCsv(`splitlog-${new Date().toISOString().slice(0, 10)}.csv`, setsToCsv(rows))
               if (result === 'cancelled') return
               setExportMsg(result === 'shared' ? 'Shared.' : 'Downloaded.')
               setTimeout(() => setExportMsg(null), 2500)
