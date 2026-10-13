@@ -153,6 +153,28 @@ describe('applying a split and duplicating a workout', () => {
     expect(db.hasSamePlan(planFromWorkout(source, '2026-10-17', counter('x'), at))).toBe(false)
   })
 
+  it('a plan with exercises but no target sets is recognised as the same plan, so it is not doubled', async () => {
+    const { db } = await fresh()
+    await db.addWorkout(workout('p', { is_plan: true, date: '2026-10-01', finished_at: null }))
+    await db.addEntry({ entry: entry('e1', 'p', 'x-bench'), exercise: { name: 'Bench Press', kind: 'strength', trackIncline: false }, sets: [] })
+    await db.addEntry({ entry: entry('e2', 'p', 'x-row', 1), exercise: { name: 'Barbell Row', kind: 'strength', trackIncline: false }, sets: [] })
+    const source = db.getWorkout('p')
+    const first = await db.addPlans([planFromWorkout(source, '2026-10-20', counter('a'), at)])
+    expect(first).toEqual({ added: 1, skipped: 0 })
+    // Duplicate onto the same day again: the copy is already there.
+    const again = await db.addPlans([planFromWorkout(source, '2026-10-20', counter('b'), at)])
+    expect(again).toEqual({ added: 0, skipped: 1 })
+    expect(db.listWorkouts().filter((w) => w.date === '2026-10-20')).toHaveLength(1)
+    expect(db.hasSamePlan(planFromWorkout(source, '2026-10-20', counter('c'), at))).toBe(true)
+    // A different list of exercises on that day is a different plan.
+    const other = planFromWorkout({ ...source, exercises: source.exercises.slice(0, 1) }, '2026-10-20', counter('d'), at)
+    expect(db.hasSamePlan(other)).toBe(false)
+    // Two plans with no exercises at all are never "the same".
+    await db.addWorkout(workout('blank', { is_plan: true, date: '2026-10-21', finished_at: null }))
+    const blank = db.getWorkout('blank')
+    expect(await db.addPlans([planFromWorkout(blank, '2026-10-22', counter('e'), at), planFromWorkout(blank, '2026-10-22', counter('f'), at)])).toEqual({ added: 2, skipped: 0 })
+  })
+
   it('a split whose exercise was deleted keeps its other exercises', async () => {
     const { db } = await withPush()
     const day = templateFromWorkout(db.getWorkout('w1'))
@@ -212,6 +234,24 @@ describe('sharing a workout', () => {
     await db.importAll(again, { kind: 'shared' })
     expect(db.listWorkouts()).toHaveLength(2)
     expect(db.listExercises()).toHaveLength(3)
+  })
+
+  it('a shared plan that only names its exercises is not doubled when opened twice', async () => {
+    const { db: sender } = await fresh()
+    await sender.addWorkout(workout('p', { title: 'Legs' }))
+    await sender.addEntry({ entry: entry('e1', 'p', 'x-squat'), exercise: { name: 'Squat', kind: 'strength', trackIncline: false }, sets: [] })
+    await sender.addEntry({ entry: entry('e2', 'p', 'x-lunge', 1), exercise: { name: 'Lunge', kind: 'strength', trackIncline: false }, sets: [] })
+    const text = serializeBackup(sharedWorkoutFile(sender, 'p'))
+    const { db } = await fresh()
+    for (const mode of ['plan', 'original'] as const) {
+      const first = await db.importAll(sharedAsImport(readImportFile(text).file, mode, '2026-10-09'), { kind: 'shared' })
+      expect(first).toMatchObject({ workouts: 1, sameWorkouts: 0 })
+      const second = await db.importAll(sharedAsImport(readImportFile(text).file, mode, '2026-10-09'), { kind: 'shared' })
+      expect(second).toMatchObject({ workouts: 0, sameWorkouts: 1 })
+    }
+    // One plan for today, and one completed copy on its original date: two in all, not four.
+    expect(db.listWorkouts().map((w) => [w.date, w.is_plan]).sort()).toEqual([['2026-09-24', false], ['2026-10-09', true]])
+    expect(db.listExercises()).toHaveLength(2)
   })
 
   it('a shared plan for a day still to come keeps its date; anything else lands on today', () => {

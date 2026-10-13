@@ -19,7 +19,7 @@ export function openedFileName(url: string): string {
 }
 
 export async function readOpenedFile(url: string): Promise<{ read: ReadFile; name: string }> {
-  if (!isNative) throw new UnreadableFile('Opening files is available in the iPhone app.')
+  if (!isNative) throw new UnreadableFile('Opening files is available in the phone app.')
   const { Filesystem, Encoding } = await import('@capacitor/filesystem')
   const stat = await Filesystem.stat({ path: url }).catch(() => null)
   if (stat && stat.size > MAX_FILE_BYTES) throw new UnreadableFile('This file is too large to be a SplitLog backup.')
