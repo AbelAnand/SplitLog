@@ -317,3 +317,7 @@ Both look right; the second has not been screenshotted because that AVD had no f
   before production access).
 - **Predictive back animation** (`android:enableOnBackInvokedCallback`): off, which is Capacitor's
   default; turning it on is cosmetic.
+
+## Screenshots and the emulator's software renderer (2026-10-14)
+
+The headless emulator on this Mac (`-gpu swiftshader_indirect`; the windowed `-gpu host` mode crashes for want of a Vulkan library) shows the workout editor with duplicated, overlapping fragments in `adb screencap`. That is a display-pipeline artifact, not the page: a screenshot taken through the WebView's own DevTools endpoint (`adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>`, then `Page.captureScreenshot`) is clean. The Play Store screenshots in `docs/android/listing/` were therefore captured through DevTools and framed to 1080 × 2160 (Play's 2:1 limit) on the app's background. Debug builds also restore the last page on relaunch, so a run that opened a workout stays there.
