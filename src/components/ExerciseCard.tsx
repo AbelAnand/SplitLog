@@ -229,7 +229,7 @@ export function ExerciseCard({
 
   return (
     <div className={`bg-surface rounded-[18px] border ${lifted ? 'border-border shadow-xl ring-1 ring-accent/30' : done ? 'border-accent/40' : 'border-border/60'}`}>
-      <div {...(onHold ? headerHold : {})} className="flex items-start justify-between pl-3 pr-1 pt-3 pb-1">
+      <div className="flex items-start justify-between pl-3 pr-1 pt-3 pb-1">
         {checkable && (
           <button
             type="button"
@@ -244,7 +244,9 @@ export function ExerciseCard({
             </span>
           </button>
         )}
-        <div className={`min-w-0 flex-1 ${checkable ? '' : 'pl-1'}`}>
+        {/* The name block is the handle for moving the exercise: away from the icon buttons and from the
+            screen edge, where iOS lets a long press grab the scroll indicator. */}
+        <div {...(onHold ? headerHold : {})} className={`min-w-0 flex-1 ${checkable ? '' : 'pl-1'}`} style={onHold ? { touchAction: 'pan-y' } : undefined}>
           <div className="flex items-center gap-2">
             <div className={`text-[17px] font-semibold truncate ${done ? 'text-muted' : ''}`}>{we.name}</div>
             {cardio && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-2 rounded px-1.5 py-0.5">Cardio</span>}
