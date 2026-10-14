@@ -110,43 +110,87 @@ export function useReorder(ids: readonly string[], onMove: (from: number, to: nu
   }
 
   const active = !!live && !live.settling
+  const finger = useRef<{ x: number; y: number } | null>(null)
+
+  // WebKit decides at the start of a touch whether its moves can be cancelled, from the listeners
+  // present at that moment. A non-passive touchmove listener added only once a row is lifted comes
+  // too late: the page scrolls and the drag is cancelled. So the listener is always there and does
+  // nothing unless a row is being held.
+  useEffect(() => {
+    const stopScroll = (e: TouchEvent) => {
+      const d = latest.current
+      if (d && !d.settling && e.cancelable) e.preventDefault()
+    }
+    document.addEventListener('touchmove', stopScroll, { passive: false })
+    return () => document.removeEventListener('touchmove', stopScroll)
+  }, [])
+
+  /** Put the lifted row under the finger at (clientX, clientY), deciding the axis on the first clear move. */
+  const moveTo = (clientX: number, clientY: number) => {
+    const d = latest.current
+    const c = container.current
+    if (!d || !c || d.settling) return
+    let axis = d.axis
+    if (!axis) {
+      const dx = clientX - startClient.current.x
+      const dyRaw = clientY - startClient.current.y
+      if (Math.hypot(dx, dyRaw) < SLOP) return
+      if (Math.abs(dx) > Math.abs(dyRaw) * 1.5) return update(null) // a swipe: not ours
+      axis = 'y'
+    }
+    // Container-relative, so scrolling the page under the finger moves the row with it.
+    const fingerY = clientY - c.getBoundingClientRect().top
+    const me = d.slots[d.from]
+    const first = d.slots[0]
+    const last = d.slots[d.slots.length - 1]
+    const dy = Math.min(last.top + last.height - (me.top + me.height), Math.max(first.top - me.top, fingerY - startY.current))
+    const centre = me.top + me.height / 2 + dy
+    const to = d.slots.filter((s, i) => i !== d.from && s.top + s.height / 2 < centre).length
+    update({ ...d, axis, dy, to })
+  }
+
   useEffect(() => {
     if (!active) return
-    const onPointerMove = (e: PointerEvent) => {
-      const d = latest.current
-      const c = container.current
-      if (!d || !c || d.settling) return
-      let axis = d.axis
-      if (!axis) {
-        const dx = e.clientX - startClient.current.x
-        const dyRaw = e.clientY - startClient.current.y
-        if (Math.hypot(dx, dyRaw) < SLOP) return
-        if (Math.abs(dx) > Math.abs(dyRaw)) return update(null) // a swipe: not ours
-        axis = 'y'
-      }
-      const fingerY = e.clientY - c.getBoundingClientRect().top
-      const me = d.slots[d.from]
-      const first = d.slots[0]
-      const last = d.slots[d.slots.length - 1]
-      const dy = Math.min(last.top + last.height - (me.top + me.height), Math.max(first.top - me.top, fingerY - startY.current))
-      const centre = me.top + me.height / 2 + dy
-      const to = d.slots.filter((s, i) => i !== d.from && s.top + s.height / 2 < centre).length
-      update({ ...d, axis, dy, to })
+    const onPointerMove = (e: PointerEvent) => { if (e.pointerType !== 'touch') { finger.current = { x: e.clientX, y: e.clientY }; moveTo(e.clientX, e.clientY) } }
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!t) return
+      finger.current = { x: t.clientX, y: t.clientY }
+      moveTo(t.clientX, t.clientY)
     }
-    const onPointerUp = () => drop()
-    const onPointerCancel = () => update(null)
-    const stopScroll = (e: TouchEvent) => { if (latest.current && e.cancelable) e.preventDefault() }
+    const onEnd = () => drop()
+    // iOS reports a cancel when it starts to scroll; with the move cancelled above that no longer
+    // happens, and a stray cancel must not drop the row mid-air.
+    const onPointerCancel = (e: PointerEvent) => { if (e.pointerType !== 'touch') update(null) }
     const stopMenu = (e: Event) => e.preventDefault()
+    // Like a list in UIKit: holding the row near the top or bottom of the screen scrolls the page.
+    const EDGE = 90
+    const scroller = window.setInterval(() => {
+      const f = finger.current
+      const d = latest.current
+      if (!f || !d || d.axis !== 'y' || d.settling) return
+      const h = window.innerHeight
+      const step = f.y < EDGE ? -Math.ceil((EDGE - f.y) / 6) : f.y > h - EDGE ? Math.ceil((f.y - (h - EDGE)) / 6) : 0
+      if (!step) return
+      const before = window.scrollY
+      window.scrollBy(0, step)
+      if (window.scrollY !== before) moveTo(f.x, f.y)
+    }, 16)
     document.addEventListener('pointermove', onPointerMove)
-    document.addEventListener('pointerup', onPointerUp)
+    document.addEventListener('pointerup', onEnd)
     document.addEventListener('pointercancel', onPointerCancel)
-    document.addEventListener('touchmove', stopScroll, { passive: false })
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    document.addEventListener('touchend', onEnd)
+    document.addEventListener('touchcancel', onEnd)
     document.addEventListener('contextmenu', stopMenu)
     return () => {
+      window.clearInterval(scroller)
       document.removeEventListener('pointermove', onPointerMove)
-      document.removeEventListener('pointerup', onPointerUp)
+      document.removeEventListener('pointerup', onEnd)
       document.removeEventListener('pointercancel', onPointerCancel)
-      document.removeEventListener('touchmove', stopScroll)
+      document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', onEnd)
+      document.removeEventListener('touchcancel', onEnd)
       document.removeEventListener('contextmenu', stopMenu)
     }
   }, [active])

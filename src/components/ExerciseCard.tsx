@@ -246,7 +246,7 @@ export function ExerciseCard({
         )}
         {/* The name block is the handle for moving the exercise: away from the icon buttons and from the
             screen edge, where iOS lets a long press grab the scroll indicator. */}
-        <div {...(onHold ? headerHold : {})} className={`min-w-0 flex-1 ${checkable ? '' : 'pl-1'}`} style={onHold ? { touchAction: 'pan-y' } : undefined}>
+        <div {...(onHold ? headerHold : {})} className={`min-w-0 flex-1 ${checkable ? '' : 'pl-1'}`}>
           <div className="flex items-center gap-2">
             <div className={`text-[17px] font-semibold truncate ${done ? 'text-muted' : ''}`}>{we.name}</div>
             {cardio && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-2 rounded px-1.5 py-0.5">Cardio</span>}
