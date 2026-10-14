@@ -24,7 +24,7 @@ npm run ios          # opens Xcode
 ```
 
 In Xcode choose **Any iOS Device**, then **Product → Archive → Distribute App → App Store Connect**.
-The project is set to version 1.1.0 (build 3); 1.0 (1) was approved on 2026-10-07, iPhone only, portrait, no export-compliance prompt. 1.0.1 (build 2) was prepared but never uploaded; its link fix ships in 1.1.0.
+The project is set to version 1.1.1 (build 4); 1.1.0 (3) was archived but never uploaded; 1.0 (1) was approved on 2026-10-07, iPhone only, portrait, no export-compliance prompt. 1.0.1 (build 2) was prepared but never uploaded; its link fix ships in 1.1.0.
 Raise the build number for every later upload (build 1 was uploaded on 2026-10-07; the next is 2).
 
 Do not archive after `vite build --mode simtest`: that bundle contains the simulator test tools.
@@ -92,12 +92,13 @@ On 2026-10-13 version 1.1.0 was created in App Store Connect with the text below
 >
 > Built by one person who uses it every week.
 
-**What's New** (for 1.1.0)
+**What's New** (for 1.1.1, the first update actually shipped)
 
+> Hold and drag to reorder exercises, as well as sets.
 > Share a workout as an image, as text, or as a file a friend can open in SplitLog.
 > Save your split and fill the calendar with it. Duplicate any workout onto other days.
 > Make your own themes and share them as a code.
-> Hold and drag to reorder sets. Add set now starts empty.
+> Add set now starts empty.
 > The History tab is now Calendar.
 > Fixed the help and privacy links.
 

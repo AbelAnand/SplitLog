@@ -131,6 +131,19 @@ export function renumbering(order: readonly string[]): { setId: string; patch: S
  * (added while the drag was in progress) stays after the others, in its existing order. A drop
  * set carries its drops with it, as the drops are part of the set.
  */
+/** The workout's exercises in the given id order, positions renumbered 0..n; ids not listed keep their order after. */
+export function reorderExercises(w: WorkoutDetail, order: readonly string[]): WorkoutDetail {
+  const rank = new Map(order.map((id, i) => [id, i]))
+  const listed = w.exercises.filter((we) => rank.has(we.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
+  const rest = w.exercises.filter((we) => !rank.has(we.id))
+  return { ...w, exercises: [...listed, ...rest].map((we, i) => ({ ...we, position: i })) }
+}
+
+/** One position patch per entry, in the given order. */
+export function positions(order: readonly string[]): { id: string; patch: { position: number } }[] {
+  return order.map((id, i) => ({ id, patch: { position: i } }))
+}
+
 export function reorderSets(w: WorkoutDetail, weId: string, order: readonly string[]): WorkoutDetail {
   const rank = new Map(order.map((id, i) => [id, i]))
   return mapExercise(w, weId, (we) => {

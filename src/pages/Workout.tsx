@@ -3,14 +3,14 @@ import { useNavigate, useNavigationType, useParams } from 'react-router'
 import { useIsMutating, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { useAllSets, useProfile, useWorkout, useWorkouts } from '../api/queries'
-import { deleteWorkout, discardHeld, editorOpen, editsQuiet, saveHeld, useAddExercise, useAddSets, useDeleteSet, useRemoveExercise, useReorderSets, useRepeatLast, useReplaceSets, useSessionControls, useUpdateExercise, useUpdateSets, useUpdateWorkout, useUpdateWorkoutExercise, writeHeld } from '../api/mutations'
+import { deleteWorkout, discardHeld, editorOpen, editsQuiet, saveHeld, useAddExercise, useAddSets, useDeleteSet, useRemoveExercise, useReorderExercises, useReorderSets, useRepeatLast, useReplaceSets, useSessionControls, useUpdateExercise, useUpdateSets, useUpdateWorkout, useUpdateWorkoutExercise, writeHeld } from '../api/mutations'
 import { editKey, keys } from '../api/keys'
 import { heldCount, holdWrites, stopHolding, useHeldCount } from '../api/hold'
 import type { WorkoutDetail } from '../api/types'
 import { ExerciseCard, type LastSession } from '../components/ExerciseCard'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { DuplicateSheet } from '../components/DuplicateSheet'
-import { summaryOf } from '../api/optimistic'
+import { moveItem, summaryOf } from '../api/optimistic'
 import { ShareWorkoutSheet } from '../components/ShareWorkoutSheet'
 import { SessionSheet } from '../components/SessionSheet'
 import { Button, Icon, MenuSheet, Sheet, Spinner } from '../components/ui'
@@ -21,6 +21,7 @@ import { isNative, setBackGesture } from '../lib/native'
 import { getGymSession, loadReminderSettings, startGymSession, stopGymSession } from '../lib/notifications'
 import { tap } from '../lib/haptics'
 import { useArrivals, useArrived, useLeaving } from '../lib/motion'
+import { useReorder } from '../lib/useReorder'
 import { LIMITS } from '../data/limits'
 
 export function WorkoutPage() {
@@ -45,6 +46,9 @@ export function WorkoutPage() {
   const replaceSets = useReplaceSets(id)
   const deleteSet = useDeleteSet(id)
   const reorderSets = useReorderSets(id)
+  const reorderExercises = useReorderExercises(id)
+  const exerciseIds = useMemo(() => (workout?.exercises ?? []).map((we) => we.id), [workout])
+  const cardOrder = useReorder(exerciseIds, (from, to) => reorderExercises.mutate({ order: moveItem(exerciseIds, from, to) }))
   const repeatLast = useRepeatLast(id)
 
   // A finished workout or a plan opens for editing: every change shows at once but is written
@@ -331,11 +335,13 @@ export function WorkoutPage() {
         </button>
       )}
 
-      <div className="flex flex-col">
-        {workout.exercises.map((we) => (
-          <ArrivingCard key={we.id} loaded={arrivals} leaving={leaving.has(we.id)}>
+      <div ref={cardOrder.containerRef} className="flex flex-col">
+        {workout.exercises.map((we, i) => (
+          <ArrivingCard key={we.id} loaded={arrivals} leaving={leaving.has(we.id)} slotRef={cardOrder.slotRef(we.id)} style={cardOrder.styleFor(i)} lifted={cardOrder.lifted === i}>
           <ExerciseCard
             we={we}
+            lifted={cardOrder.lifted === i}
+            onHold={(press) => cardOrder.lift(i, press)}
             unit={unit}
             distanceUnit={distanceUnit}
             prevBestKg={prevBest.get(we.exercise_id) ?? 0}
@@ -443,11 +449,11 @@ export function WorkoutPage() {
 }
 
 /** An exercise card: eases in if it was added while you watched, closes up when removed. */
-function ArrivingCard({ loaded, leaving, children }: { loaded: React.RefObject<boolean>; leaving: boolean; children: React.ReactNode }) {
+function ArrivingCard({ loaded, leaving, slotRef, style, lifted, children }: { loaded: React.RefObject<boolean>; leaving: boolean; slotRef?: (el: HTMLElement | null) => void; style?: React.CSSProperties; lifted?: boolean; children: React.ReactNode }) {
   const arrived = useArrived(loaded)
   return (
-    <div className={`collapsible ${leaving ? 'leaving' : ''}`}>
-      <div className={`pb-3 ${arrived ? 'rise-in' : ''}`}>{children}</div>
+    <div ref={slotRef} className={`collapsible ${leaving ? 'leaving' : ''}`}>
+      <div data-keep-keyboard={lifted ? '' : undefined} style={style} className={`pb-3 ${arrived ? 'rise-in' : ''}`}>{children}</div>
     </div>
   )
 }

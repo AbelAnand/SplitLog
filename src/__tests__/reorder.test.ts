@@ -134,3 +134,21 @@ describe('Add set creates an empty set', () => {
     expect(blankSet({ after: set('s1', 1, 100, 5), type: 'drop', unit: 'lb', distanceUnit: 'mi', cardio: false })).toMatchObject({ set_type: 'drop', weight: 0, reps: 0, drops: [{ weight: 0, reps: 0 }] })
   })
 })
+
+describe('reorderExercises', () => {
+  const w = { id: 'w', exercises: [
+    { id: 'a', position: 0, sets: [] }, { id: 'b', position: 1, sets: [] }, { id: 'c', position: 2, sets: [] },
+  ] } as unknown as WorkoutDetail
+  it('puts the exercises in the given order and renumbers positions from 0', () => {
+    const next = opt.reorderExercises(w, ['c', 'a', 'b'])
+    expect(next.exercises.map((e) => e.id)).toEqual(['c', 'a', 'b'])
+    expect(next.exercises.map((e) => e.position)).toEqual([0, 1, 2])
+  })
+  it('keeps ids missing from the order after the listed ones', () => {
+    const next = opt.reorderExercises(w, ['b'])
+    expect(next.exercises.map((e) => e.id)).toEqual(['b', 'a', 'c'])
+  })
+  it('makes one position patch per entry', () => {
+    expect(opt.positions(['c', 'a'])).toEqual([{ id: 'c', patch: { position: 0 } }, { id: 'a', patch: { position: 1 } }])
+  })
+})

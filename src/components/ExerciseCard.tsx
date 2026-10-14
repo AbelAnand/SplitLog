@@ -83,6 +83,8 @@ export function ExerciseCard({
   onComplete,
   onMetrics,
   onRemove,
+  onHold,
+  lifted = false,
 }: {
   we: WorkoutExerciseDetail
   unit: Unit
@@ -98,6 +100,9 @@ export function ExerciseCard({
   onDeleteSet: (setId: string) => void
   /** The exercise's set ids in their new order, after a drag. */
   onReorderSets: (order: string[]) => void
+  /** Hold the card's header to pick the whole exercise up and move it among the others. */
+  onHold?: (press: { clientX: number; clientY: number }) => void
+  lifted?: boolean
   onNotes: (notes: string) => void
   onComplete: (completed: boolean) => void
   onMetrics: (metrics: MetricKey[]) => void
@@ -220,9 +225,11 @@ export function ExerciseCard({
     return { sec, dist }
   }, [we.sets, cardio, distanceUnit])
 
+  const headerHold = useLongPress((press) => onHold?.(press), LONG_PRESS_MS, tap)
+
   return (
-    <div className={`bg-surface rounded-[18px] border ${done ? 'border-accent/40' : 'border-border/60'}`}>
-      <div className="flex items-start justify-between pl-3 pr-1 pt-3 pb-1">
+    <div className={`bg-surface rounded-[18px] border ${lifted ? 'border-border shadow-xl ring-1 ring-accent/30' : done ? 'border-accent/40' : 'border-border/60'}`}>
+      <div {...(onHold ? headerHold : {})} className="flex items-start justify-between pl-3 pr-1 pt-3 pb-1">
         {checkable && (
           <button
             type="button"

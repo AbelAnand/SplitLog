@@ -62,7 +62,7 @@ A SQLite file inside the app's own storage on the iPhone. Every batch of changes
 - Per-set rows: weight × reps, stored as typed with the unit.
 - Set types: working, warm-up (W, excluded from records and volume), drop set (one set stepping down in weight, as many drops as you like), to failure (F).
 - Set menu: change type, duplicate, copy to all sets below, delete.
-- Hold a set and drag to reorder it (1.1).
+- Hold a set and drag to reorder it; hold an exercise's name to move the whole exercise (1.1).
 - Add set starts empty; Duplicate copies a set (1.1).
 - Fill-down: empty sets inherit the values above.
 - Add set copies the previous set.

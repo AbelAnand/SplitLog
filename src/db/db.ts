@@ -15,6 +15,9 @@ import { BACKUP_FORMAT, DEFAULT_PROFILE, type BackupFile, type Op, type Persiste
 
 export class NotFound extends Error {}
 
+/** What the app may change on a workout's exercise entry after it exists. */
+export type EntryPatch = { notes?: string; completed_at?: string | null; position?: number }
+
 const byPosition = (a: StoredWorkoutExercise, b: StoredWorkoutExercise) => a.position - b.position || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 const bySetNumber = (a: StoredSet, b: StoredSet) => a.set_number - b.set_number || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 
@@ -409,10 +412,19 @@ export class LocalDb {
     return this.commit(ops)
   }
 
-  patchEntry(id: string, patch: { notes?: string; completed_at?: string | null }): Promise<void> {
-    const e = this.entries.get(id)
-    if (!e) return Promise.reject(new NotFound('Exercise not found'))
-    return this.commit([{ t: 'workout_exercises', id, v: { ...e, ...patch } }])
+  patchEntry(id: string, patch: EntryPatch): Promise<void> {
+    return this.patchEntries([{ id, patch }])
+  }
+
+  /** Several entries in one transaction, so a new exercise order is never stored half-way. */
+  patchEntries(updates: { id: string; patch: EntryPatch }[]): Promise<void> {
+    const ops = []
+    for (const { id, patch } of updates) {
+      const e = this.entries.get(id)
+      if (!e) return Promise.reject(new NotFound('Exercise not found'))
+      ops.push({ t: 'workout_exercises' as const, id, v: { ...e, ...patch } })
+    }
+    return this.commit(ops)
   }
 
   removeEntry(id: string): Promise<void> {
