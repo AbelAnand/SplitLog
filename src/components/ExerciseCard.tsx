@@ -9,6 +9,7 @@ import { LONG_PRESS_MS, useLongPress } from '../lib/useLongPress'
 import { useReorder } from '../lib/useReorder'
 import { convert, convertDistance, formatDistance, formatDuration, formatPace, formatWeight, parseDuration, stepFor, toKg, type DistanceUnit, type Unit } from '../lib/units'
 import { Button, Icon, MenuSheet, PrBadge, Segmented, Sheet, Stepper, Toggle } from './ui'
+import { LastSessionSheet } from './PreviousSheet'
 import { MetricsSheet } from './MetricsSheet'
 import { SwipeRow } from './SwipeRow'
 import { METRIC_BY_KEY, type MetricKey } from '../data/cardio-metrics'
@@ -226,6 +227,7 @@ export function ExerciseCard({
   }, [we.sets, cardio, distanceUnit])
 
   const headerHold = useLongPress((press) => onHold?.(press), LONG_PRESS_MS, tap)
+  const [lastOpen, setLastOpen] = useState(false)
 
   return (
     <div className={`bg-surface rounded-[18px] border ${lifted ? 'border-border shadow-xl ring-1 ring-accent/30' : done ? 'border-accent/40' : 'border-border/60'}`}>
@@ -252,9 +254,9 @@ export function ExerciseCard({
             {cardio && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-2 rounded px-1.5 py-0.5">Cardio</span>}
           </div>
           {lastLine && (
-            <button type="button" onClick={() => { tap(); applyLast() }} className="mt-0.5 max-w-full flex items-center gap-1.5 text-[12px] text-muted active:text-text">
+            <button type="button" onClick={() => { tap(); setLastOpen(true) }} className="mt-0.5 max-w-full flex items-center gap-1.5 text-[12px] text-muted active:text-text">
               <span className="truncate">Last ({last!.date}): {lastLine}</span>
-              <span className="shrink-0 text-accent font-medium">Use</span>
+              <span className="shrink-0 text-accent font-medium">See all</span>
             </button>
           )}
         </div>
@@ -331,6 +333,9 @@ export function ExerciseCard({
         </button>
       </div>
 
+      {last && (
+        <LastSessionSheet open={lastOpen} onClose={() => setLastOpen(false)} name={we.name} date={last.date} sets={last.sets} cardio={cardio} metrics={metrics} unit={unit} distanceUnit={distanceUnit} onUse={applyLast} />
+      )}
       <MenuSheet
         open={menu}
         onClose={() => setMenu(false)}

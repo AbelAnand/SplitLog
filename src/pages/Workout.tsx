@@ -10,6 +10,7 @@ import type { WorkoutDetail } from '../api/types'
 import { ExerciseCard, type LastSession } from '../components/ExerciseCard'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { DuplicateSheet } from '../components/DuplicateSheet'
+import { PreviousWorkoutSheet } from '../components/PreviousSheet'
 import { moveItem, summaryOf } from '../api/optimistic'
 import { ShareWorkoutSheet } from '../components/ShareWorkoutSheet'
 import { SessionSheet } from '../components/SessionSheet'
@@ -81,6 +82,7 @@ export function WorkoutPage() {
   const [sessionSheet, setSessionSheet] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [duplicate, setDuplicate] = useState(false)
+  const [repeatPreview, setRepeatPreview] = useState(false)
   const [share, setShare] = useState(false)
   const [gymActive, setGymActive] = useState(false)
 
@@ -324,7 +326,7 @@ export function WorkoutPage() {
         <button
           type="button"
           disabled={repeatLast.isPending}
-          onClick={() => repeatLast.mutate({ sourceWorkoutId: previousSameTitle.id, planned: plan })}
+          onClick={() => { tap(); setRepeatPreview(true) }}
           className="press-soft w-full flex items-center gap-3 rounded-[18px] bg-accent-dim border border-accent/30 p-4 mb-4 text-left active:brightness-110 disabled:opacity-60"
         >
           <span className="text-accent"><Icon.Repeat /></span>
@@ -426,6 +428,8 @@ export function WorkoutPage() {
       />
 
       <DuplicateSheet workout={duplicate ? summaryOf(workout) : null} onClose={() => setDuplicate(false)} />
+
+      <PreviousWorkoutSheet workoutId={repeatPreview && previousSameTitle ? previousSameTitle.id : null} onClose={() => setRepeatPreview(false)} plan={plan} unit={unit} distanceUnit={distanceUnit} onRepeat={() => { if (previousSameTitle) repeatLast.mutate({ sourceWorkoutId: previousSameTitle.id, planned: plan }) }} />
       <ShareWorkoutSheet workoutId={share ? workout.id : null} onClose={() => setShare(false)} />
 
       <Sheet open={confirmLeave} onClose={() => setConfirmLeave(false)} title="Save your changes?">
