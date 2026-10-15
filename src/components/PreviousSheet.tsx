@@ -54,7 +54,7 @@ export function LastSessionSheet({ open, onClose, name, date, sets, cardio, metr
       </div>
       <div className="flex gap-2">
         <Button variant="secondary" size="lg" className="flex-1" onClick={onClose}>Close</Button>
-        <Button size="lg" className="flex-1" onClick={() => { onUse(); onClose() }}><Icon.Repeat /> Use these sets</Button>
+        <Button size="lg" className="flex-1" onClick={() => { onUse(); onClose() }}><Icon.Repeat /> Use sets</Button>
       </div>
     </Sheet>
   )
