@@ -70,6 +70,31 @@ describe('weekly streak', () => {
     const s = computeStreak(['2026-09-21'], 4, today)
     expect(s.week.map((d) => d.trained)).toEqual([true, false, false, false, false, false, false])
     expect(s.week.findIndex((d) => d.isToday)).toBe(2)
+    expect(s.week.map((d) => d.isFuture)).toEqual([false, false, false, true, true, true, true])
+  })
+
+  it('a week ends on Sunday night, and Monday morning starts a fresh one without breaking the run', () => {
+    const dates = [...week(14, 9, 4), ...week(21, 9, 3)] // Mon 14 – Thu 17, Mon 21 – Wed 23
+    const sundayNight = new Date(2026, 8, 27, 23, 59)
+    expect(computeStreak(dates, 3, sundayNight)).toMatchObject({ streak: 2, thisWeekCount: 3, thisWeekDone: true })
+    const mondayMorning = new Date(2026, 8, 28, 0, 1)
+    const next = computeStreak(dates, 3, mondayMorning)
+    expect(next).toMatchObject({ streak: 2, thisWeekCount: 0, thisWeekDone: false })
+    expect(next.week[0].date.getDate()).toBe(28)
+    // Still not broken a week later with nothing logged yet: it just has not grown.
+    expect(computeStreak(dates, 3, new Date(2026, 9, 4, 23, 0)).streak).toBe(2)
+    // The week after that, last week was missed, so it is over.
+    expect(computeStreak(dates, 3, new Date(2026, 9, 5, 9, 0)).streak).toBe(0)
+  })
+
+  it('follows the goal as it is changed, and spans the turn of the year', () => {
+    const dates = [...week(14, 9, 3), ...week(7, 9, 3), '2026-09-21', '2026-09-22']
+    expect(computeStreak(dates, 3, today)).toMatchObject({ streak: 2, thisWeekDone: false })
+    expect(computeStreak(dates, 2, today)).toMatchObject({ streak: 3, thisWeekDone: true })
+    expect(computeStreak(dates, 4, today).streak).toBe(0)
+    // Mon 28 Dec 2026 – Sun 3 Jan 2027 is one week, and the one before it ends on 27 Dec.
+    const turn = ['2026-12-21', '2026-12-22', '2026-12-31', '2027-01-02', '2027-01-04', '2027-01-05']
+    expect(computeStreak(turn, 2, new Date(2027, 0, 6, 12))).toMatchObject({ streak: 3, thisWeekDone: true })
   })
 })
 

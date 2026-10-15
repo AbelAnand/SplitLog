@@ -17,6 +17,12 @@ const KEY = 'fitlog.reminders'
 const GYM_KEY = 'fitlog.gymSession'
 /** Set once daily reminders have been scheduled, so the plugin is never touched before the user turns them on. */
 const DAILY_SCHEDULED_KEY = 'fitlog.dailyScheduled'
+/**
+ * Android only (iOS ignores it): a reminder a few minutes off is fine, and an exact alarm would need
+ * the SCHEDULE_EXACT_ALARM permission plus an "Alarms & reminders" settings prompt. The permission
+ * is stripped from the manifest, so this must stay false.
+ */
+const INEXACT = { isExactNotification: false } as const
 const DAILY_IDS = Array.from({ length: 14 }, (_, i) => 1001 + i)
 const GYM_IDS = Array.from({ length: 10 }, (_, i) => 2001 + i)
 
@@ -87,6 +93,7 @@ export async function syncDailyReminder(trainedDates: string[], settings?: Remin
       body: 'Trained today? Take 30 seconds to log it and keep the streak alive.',
       schedule: { at, allowWhileIdle: true },
       extra: { kind: 'daily' },
+      ...INEXACT,
     })
   }
   if (notifications.length) await LocalNotifications.schedule({ notifications })
@@ -98,12 +105,14 @@ export interface GymSession { workoutId: string; title: string; startedAt: numbe
 /** Start soft nudges for an in-progress workout. */
 export async function startGymSession(workoutId: string, title: string): Promise<void> {
   const store = await kv()
-  const session: GymSession = { workoutId, title, startedAt: Date.now() }
-  await store.set(GYM_KEY, JSON.stringify(session))
+  // The session is recorded only once reminders will really be scheduled, so a refused permission
+  // or the setting being off never leaves a phantom session behind.
   if (!isNative) return
   const s = await loadReminderSettings()
-  if (!s.gymEnabled) return
-  if (!(await requestNotificationPermission())) return
+  if (!s.gymEnabled) { await store.remove(GYM_KEY).catch(() => {}); return }
+  if (!(await requestNotificationPermission())) { await store.remove(GYM_KEY).catch(() => {}); return }
+  const session: GymSession = { workoutId, title, startedAt: Date.now() }
+  await store.set(GYM_KEY, JSON.stringify(session))
   const { LocalNotifications } = await import('@capacitor/local-notifications')
   await LocalNotifications.cancel({ notifications: GYM_IDS.map((id) => ({ id })) }).catch(() => {})
   const bodies = [
@@ -120,6 +129,7 @@ export async function startGymSession(workoutId: string, title: string): Promise
       body: bodies[i % bodies.length],
       schedule: { at: new Date(now + (i + 1) * s.gymIntervalMin * 60_000), allowWhileIdle: true },
       extra: { kind: 'gym', workoutId },
+      ...INEXACT,
     })),
   })
 }

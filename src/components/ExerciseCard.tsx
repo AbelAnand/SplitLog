@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Drop, SetDetail, SetPatch, SetType, WorkoutExerciseDetail } from '../api/types'
 import type { NewSet } from '../api/mutations'
+import { moveItem } from '../api/optimistic'
 import { celebrate, tap } from '../lib/haptics'
 import { useArrivals, useArrived, useLeaving } from '../lib/motion'
+import { blankSet, isBlank, matchHints, parseReps, parseWeight, repsText, seedDrop, weightText } from '../lib/sets'
+import { LONG_PRESS_MS, useLongPress } from '../lib/useLongPress'
+import { useReorder } from '../lib/useReorder'
 import { convert, convertDistance, formatDistance, formatDuration, formatPace, formatWeight, parseDuration, stepFor, toKg, type DistanceUnit, type Unit } from '../lib/units'
 import { Button, Icon, MenuSheet, PrBadge, Segmented, Sheet, Stepper, Toggle } from './ui'
+import { LastSessionSheet } from './PreviousSheet'
 import { MetricsSheet } from './MetricsSheet'
 import { SwipeRow } from './SwipeRow'
 import { METRIC_BY_KEY, type MetricKey } from '../data/cardio-metrics'
@@ -16,12 +21,6 @@ export interface LastSession {
   sets: LastSet[]
 }
 export type LastSet = Pick<SetDetail, 'weight' | 'unit' | 'reps' | 'set_type' | 'duration_seconds' | 'distance' | 'distance_unit' | 'drops' | 'incline' | 'extra'>
-
-/** A sensible first drop: ~80% of the weight, rounded to a plate. */
-function seedDrop(weight: number, reps: number, unit: Unit): Drop {
-  const step = stepFor(unit)
-  return { weight: Math.max(step, Math.round((weight * 0.8) / step) * step), reps: reps || 8 }
-}
 
 const TYPE_LABEL: Record<SetType, string> = { warmup: 'Warm-up', working: 'Working', drop: 'Drop set', failure: 'To failure' }
 const TYPE_SHORT: Record<SetType, string> = { warmup: 'W', working: '', drop: 'D', failure: 'F' }
@@ -56,14 +55,6 @@ function metricPatch(k: MetricKey, text: string, du: DistanceUnit, current: Metr
   }
 }
 
-function hasAnyMetric(s: MetricSet): boolean {
-  return !!s.duration_seconds || !!s.distance || !!s.incline || Object.values(s.extra).some((v) => !!v)
-}
-
-function isBlank(s: SetDetail, cardio: boolean) {
-  return cardio ? !hasAnyMetric(s) : s.weight === 0 && s.reps === 0
-}
-
 /** "30:00 · 3 mph · 12%" style summary of one cardio set. */
 function cardioSummary(s: MetricSet, metrics: MetricKey[], du: DistanceUnit): string {
   return metrics
@@ -88,10 +79,13 @@ export function ExerciseCard({
   onAddSets,
   onReplaceSets,
   onDeleteSet,
+  onReorderSets,
   onNotes,
   onComplete,
   onMetrics,
   onRemove,
+  onHold,
+  lifted = false,
 }: {
   we: WorkoutExerciseDetail
   unit: Unit
@@ -105,6 +99,11 @@ export function ExerciseCard({
   onAddSets: (sets: NewSet[]) => void
   onReplaceSets: (sets: NewSet[]) => void
   onDeleteSet: (setId: string) => void
+  /** The exercise's set ids in their new order, after a drag. */
+  onReorderSets: (order: string[]) => void
+  /** Hold the card's header to pick the whole exercise up and move it among the others. */
+  onHold?: (press: { clientX: number; clientY: number }) => void
+  lifted?: boolean
   onNotes: (notes: string) => void
   onComplete: (completed: boolean) => void
   onMetrics: (metrics: MetricKey[]) => void
@@ -151,6 +150,9 @@ export function ExerciseCard({
 
   const lastSet = we.sets.at(-1)
 
+  // Last time's numbers for each row: warm-ups against warm-ups, working sets against working sets.
+  const hints = useMemo(() => matchHints(we.sets, last?.sets), [we.sets, last])
+
   /** Change one set, and fill the same field down into untouched sets below it. */
   const changeSet = (set: SetDetail, patch: SetPatch) => {
     const idx = we.sets.findIndex((s) => s.id === set.id)
@@ -162,24 +164,15 @@ export function ExerciseCard({
     onUpdateSets(updates)
   }
 
+  /** A new, empty set: the row shows its placeholders (and last session's numbers as hints). */
   const addSet = (type: SetType = 'working') => {
     tap()
-    onAddSets([
-      {
-        set_number: (lastSet?.set_number ?? 0) + 1,
-        weight: lastSet?.weight ?? 0,
-        reps: lastSet?.reps ?? 0,
-        unit: lastSet?.unit ?? unit,
-        set_type: type,
-        duration_seconds: lastSet?.duration_seconds ?? null,
-        distance: lastSet?.distance ?? null,
-        distance_unit: cardio ? lastSet?.distance_unit ?? distanceUnit : null,
-        drops: type === 'drop' ? (lastSet?.drops.length ? lastSet.drops : [seedDrop(lastSet?.weight ?? 0, lastSet?.reps ?? 0, unit)]) : [],
-        incline: lastSet?.incline ?? null,
-        extra: lastSet?.extra ?? {},
-      },
-    ])
+    onAddSets([blankSet({ after: lastSet, type, unit, distanceUnit, cardio })])
   }
+
+  // Hold a set and drag it up or down; on release the exercise is renumbered.
+  const setIds = we.sets.map((s) => s.id)
+  const reorder = useReorder(setIds, (from, to) => onReorderSets(moveItem(setIds, from, to)))
 
   const duplicate = (s: SetDetail) => {
     onAddSets([{ set_number: (lastSet?.set_number ?? 0) + 1, weight: s.weight, reps: s.reps, unit: s.unit, set_type: s.set_type, duration_seconds: s.duration_seconds, distance: s.distance, distance_unit: s.distance_unit, drops: s.drops, incline: s.incline, extra: s.extra }])
@@ -233,8 +226,11 @@ export function ExerciseCard({
     return { sec, dist }
   }, [we.sets, cardio, distanceUnit])
 
+  const headerHold = useLongPress((press) => onHold?.(press), LONG_PRESS_MS, tap)
+  const [lastOpen, setLastOpen] = useState(false)
+
   return (
-    <div className={`bg-surface rounded-[18px] border ${done ? 'border-accent/40' : 'border-border/60'}`}>
+    <div className={`bg-surface rounded-[18px] border ${lifted ? 'border-border shadow-xl ring-1 ring-accent/30' : done ? 'border-accent/40' : 'border-border/60'}`}>
       <div className="flex items-start justify-between pl-3 pr-1 pt-3 pb-1">
         {checkable && (
           <button
@@ -250,15 +246,17 @@ export function ExerciseCard({
             </span>
           </button>
         )}
-        <div className={`min-w-0 flex-1 ${checkable ? '' : 'pl-1'}`}>
+        {/* The name block is the handle for moving the exercise: away from the icon buttons and from the
+            screen edge, where iOS lets a long press grab the scroll indicator. */}
+        <div {...(onHold ? headerHold : {})} className={`min-w-0 flex-1 ${checkable ? '' : 'pl-1'}`}>
           <div className="flex items-center gap-2">
             <div className={`text-[17px] font-semibold truncate ${done ? 'text-muted' : ''}`}>{we.name}</div>
             {cardio && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-2 rounded px-1.5 py-0.5">Cardio</span>}
           </div>
           {lastLine && (
-            <button type="button" onClick={() => { tap(); applyLast() }} className="mt-0.5 max-w-full flex items-center gap-1.5 text-[12px] text-muted active:text-text">
+            <button type="button" onClick={() => { tap(); setLastOpen(true) }} className="mt-0.5 max-w-full flex items-center gap-1.5 text-[12px] text-muted active:text-text">
               <span className="truncate">Last ({last!.date}): {lastLine}</span>
-              <span className="shrink-0 text-accent font-medium">Use</span>
+              <span className="shrink-0 text-accent font-medium">See all</span>
             </button>
           )}
         </div>
@@ -287,14 +285,16 @@ export function ExerciseCard({
         <div />
       </div>
 
-      <div className="px-4 pb-0.5 pt-1 flex flex-col">
+      <div ref={reorder.containerRef} className="px-4 pb-0.5 pt-1 flex flex-col">
         {we.sets.map((s, i) => (
-          <Arriving key={s.id} loaded={arrivals} leaving={leaving.has(s.id)}>
-            {cardio ? (
-              <CardioRow set={s} hint={last?.sets[i]} label={numbers[i]} metrics={metrics} distanceUnit={distanceUnit} onChange={(p) => changeSet(s, p)} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
-            ) : (
-              <StrengthRow set={s} hint={last?.sets[i]} label={numbers[i]} unit={unit} isPr={s.id === prSetId} onChange={(p) => changeSet(s, p)} onDrops={(drops) => onUpdateSets([{ setId: s.id, patch: { drops } }])} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
-            )}
+          <Arriving key={s.id} loaded={arrivals} leaving={leaving.has(s.id)} slotRef={reorder.slotRef(s.id)}>
+            <SetSlot lifted={reorder.lifted === i} style={reorder.styleFor(i)} onHold={(press) => reorder.lift(i, press)}>
+              {cardio ? (
+                <CardioRow set={s} hint={hints[i]} label={numbers[i]} metrics={metrics} distanceUnit={distanceUnit} onChange={(p) => changeSet(s, p)} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
+              ) : (
+                <StrengthRow set={s} hint={hints[i]} label={numbers[i]} unit={unit} isPr={s.id === prSetId} onChange={(p) => changeSet(s, p)} onDrops={(drops) => onUpdateSets([{ setId: s.id, patch: { drops } }])} onMenu={() => setRowMenu(s)} onDelete={() => removeSet(s.id)} />
+              )}
+            </SetSlot>
           </Arriving>
         ))}
       </div>
@@ -333,6 +333,9 @@ export function ExerciseCard({
         </button>
       </div>
 
+      {last && (
+        <LastSessionSheet open={lastOpen} onClose={() => setLastOpen(false)} name={we.name} date={last.date} sets={last.sets} cardio={cardio} metrics={metrics} unit={unit} distanceUnit={distanceUnit} onUse={applyLast} />
+      )}
       <MenuSheet
         open={menu}
         onClose={() => setMenu(false)}
@@ -387,14 +390,32 @@ export function ExerciseCard({
 /* ---------- Rows ---------- */
 
 /** One row of a list: eases in if it was added while you watched, closes up when removed. */
-function Arriving({ loaded, leaving, children }: { loaded: React.RefObject<boolean>; leaving: boolean; children: React.ReactNode }) {
+function Arriving({ loaded, leaving, slotRef, children }: { loaded: React.RefObject<boolean>; leaving: boolean; slotRef?: (el: HTMLElement | null) => void; children: React.ReactNode }) {
   const arrived = useArrived(loaded)
   return (
-    <div className={`collapsible ${leaving ? 'leaving' : ''}`}>
+    <div ref={slotRef} className={`collapsible ${leaving ? 'leaving' : ''}`}>
       <div className={`pb-1.5 ${arrived ? 'row-in' : ''}`}>{children}</div>
     </div>
   )
 }
+
+/**
+ * The hold target for dragging a set: the whole row (a thumb-sized target), with the drops of a
+ * drop set, so the set moves as one. A tap on anything inside still does what it did; the text
+ * fields stop the press reaching here (`stopHold`) so holding one selects its text as usual.
+ * While lifted, the row tells src/main.tsx to leave the keyboard alone.
+ */
+function SetSlot({ lifted, style, onHold, children }: { lifted: boolean; style?: React.CSSProperties; onHold: (press: { clientX: number; clientY: number }) => void; children: React.ReactNode }) {
+  const hold = useLongPress((press) => onHold(press), LONG_PRESS_MS, tap)
+  return (
+    <div {...hold} data-keep-keyboard={lifted ? '' : undefined} style={style} className={lifted ? '-mx-2 px-2 py-1 rounded-2xl bg-surface border border-border shadow-xl ring-1 ring-accent/30' : undefined}>
+      {children}
+    </div>
+  )
+}
+
+/** Text fields keep their own long press (select text) instead of lifting the row. */
+const stopHold = (e: React.PointerEvent) => e.stopPropagation()
 
 const inputClass = 'h-11 w-full rounded-xl bg-surface-2 border border-border/60 text-center text-[17px] font-semibold tabular outline-none focus:border-accent/70 placeholder:text-faint placeholder:font-normal'
 
@@ -409,31 +430,47 @@ function Badge({ label, type, isPr, onClick }: { label: string; type: SetType; i
   )
 }
 
-function useLocalField(serverValue: string, commit: (v: string) => void, delay = 400) {
+/**
+ * A number field that keeps what is being typed and commits it a moment after the last keystroke
+ * (or on blur). What is stored can change under the field (fill-down, Use last, Discard) and the
+ * field then shows it, except while the field is being typed in: showing "100" the moment "100."
+ * is committed would turn the next keystroke into "1005". On blur the text is tidied by `tidy`,
+ * the same way the stored value would be shown.
+ */
+function useLocalField(serverValue: string, commit: (v: string) => void, tidy: (v: string) => string, delay = 400) {
   const [v, setV] = useState(serverValue)
   const dirty = useRef(false)
+  const focused = useRef(false)
   const timer = useRef<number | null>(null)
   useEffect(() => {
-    if (!dirty.current) setV(serverValue)
+    if (!dirty.current && !focused.current) setV(serverValue)
   }, [serverValue])
   const onChange = (next: string) => {
     dirty.current = true
     setV(next)
     if (timer.current) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => {
+      timer.current = null
       commit(next)
       dirty.current = false
     }, delay)
   }
-  const flush = () => {
+  const onFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    focused.current = true
+    e.target.select()
+  }
+  const onBlur = () => {
+    // Only a commit still waiting runs here: committing again would fill a set added since.
     if (timer.current) {
       window.clearTimeout(timer.current)
       timer.current = null
       commit(v)
       dirty.current = false
     }
+    focused.current = false
+    setV(tidy(v))
   }
-  return { v, onChange, flush }
+  return { v, onChange, onFocus, onBlur }
 }
 
 /** The same set from the last session, shown as ghost text in an empty field. */
@@ -441,8 +478,8 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
   const displayWeight = set.unit === unit ? set.weight : convert(set.weight, set.unit, unit)
   const hintWeight = hint?.weight ? formatWeight(convert(hint.weight, hint.unit, unit)) : '0'
   const hintReps = hint?.reps ? String(hint.reps) : '0'
-  const w = useLocalField(displayWeight ? formatWeight(displayWeight) : '', (s) => onChange({ weight: Math.min(99999, Math.max(0, parseFloat(s.replace(',', '.')) || 0)), unit }))
-  const r = useLocalField(set.reps ? String(set.reps) : '', (s) => onChange({ reps: Math.min(LIMITS.reps, Math.max(0, parseInt(s, 10) || 0)) }))
+  const w = useLocalField(weightText(displayWeight), (s) => onChange({ weight: parseWeight(s), unit }), (s) => weightText(parseWeight(s)))
+  const r = useLocalField(repsText(set.reps), (s) => onChange({ reps: parseReps(s) }), (s) => repsText(parseReps(s)))
   const isDrop = set.set_type === 'drop'
   return (
     <div className="flex flex-col gap-1.5">
@@ -450,11 +487,11 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
       <div className="grid grid-cols-[40px_1fr_1fr_44px] gap-2 items-center bg-surface">
         <Badge label={label} type={set.set_type} isPr={isPr} onClick={onMenu} />
         <div className="relative @container">
-          <input className={`${inputClass} ${isPr ? 'ring-1 ring-inset ring-pr/70' : ''}`} inputMode="decimal" placeholder={hintWeight} value={w.v} onFocus={(e) => e.target.select()} onBlur={w.flush} onChange={(e) => w.onChange(e.target.value)} aria-label={`Set ${label} weight`} />
+          <input className={`${inputClass} ${isPr ? 'ring-1 ring-inset ring-pr/70' : ''}`} inputMode="decimal" placeholder={hintWeight} onPointerDown={stopHold} value={w.v} onFocus={w.onFocus} onBlur={w.onBlur} onChange={(e) => w.onChange(e.target.value)} aria-label={`Set ${label} weight`} />
           {/* A long number needs the room, so the badge gives up its letters. */}
           {isPr && <PrBadge compact={w.v.length > 3} className="absolute top-0 right-0 pointer-events-none" />}
         </div>
-        <input className={inputClass} inputMode="numeric" placeholder={hintReps} value={r.v} onFocus={(e) => e.target.select()} onBlur={r.flush} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`Set ${label} reps`} />
+        <input className={inputClass} inputMode="numeric" placeholder={hintReps} onPointerDown={stopHold} value={r.v} onFocus={r.onFocus} onBlur={r.onBlur} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`Set ${label} reps`} />
         <button type="button" aria-label="Set options" onClick={() => { tap(); onMenu() }} className="press h-11 w-11 flex items-center justify-center text-faint active:text-text">
           <Icon.More />
         </button>
@@ -477,7 +514,8 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
             type="button"
             onClick={() => {
               tap()
-              const prev = set.drops.at(-1) ?? { weight: set.weight, reps: set.reps }
+              // Step down from the last drop that has a weight, else from the set itself.
+              const prev = [...set.drops].reverse().find((d) => d.weight) ?? { weight: set.weight, reps: set.reps }
               onDrops([...set.drops, seedDrop(prev.weight, prev.reps, set.unit)])
             }}
             className="self-start h-8 px-2 -ml-1 text-[13px] font-medium text-accent"
@@ -493,14 +531,14 @@ function StrengthRow({ set, hint, label, unit, isPr, onChange, onDrops, onMenu, 
 /** One weight-drop inside a drop set. Values are stored in the parent set's unit. */
 function DropRow({ drop, unit, displayUnit, label, onChange, onRemove }: { drop: Drop; unit: Unit; displayUnit: Unit; label: string; onChange: (d: Drop) => void; onRemove: () => void }) {
   const shown = convert(drop.weight, unit, displayUnit)
-  const w = useLocalField(shown ? formatWeight(shown) : '', (s) => onChange({ ...drop, weight: Math.max(0, convert(parseFloat(s.replace(',', '.')) || 0, displayUnit, unit)) }))
-  const r = useLocalField(drop.reps ? String(drop.reps) : '', (s) => onChange({ ...drop, reps: Math.max(0, parseInt(s, 10) || 0) }))
+  const w = useLocalField(weightText(shown), (s) => onChange({ ...drop, weight: convert(parseWeight(s), displayUnit, unit) }), (s) => weightText(parseWeight(s)))
+  const r = useLocalField(repsText(drop.reps), (s) => onChange({ ...drop, reps: parseReps(s) }), (s) => repsText(parseReps(s)))
   const small = 'h-9 w-full rounded-lg bg-surface-2 border border-border/60 text-center text-[15px] font-semibold tabular outline-none focus:border-accent/70 placeholder:text-faint placeholder:font-normal'
   return (
     <div className="row-in grid grid-cols-[16px_1fr_1fr_36px] gap-2 items-center">
       <span className="text-faint text-[13px]">↓</span>
-      <input className={small} inputMode="decimal" placeholder="0" value={w.v} onFocus={(e) => e.target.select()} onBlur={w.flush} onChange={(e) => w.onChange(e.target.value)} aria-label={`${label} weight`} />
-      <input className={small} inputMode="numeric" placeholder="0" value={r.v} onFocus={(e) => e.target.select()} onBlur={r.flush} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`${label} reps`} />
+      <input className={small} inputMode="decimal" placeholder="0" onPointerDown={stopHold} value={w.v} onFocus={w.onFocus} onBlur={w.onBlur} onChange={(e) => w.onChange(e.target.value)} aria-label={`${label} weight`} />
+      <input className={small} inputMode="numeric" placeholder="0" onPointerDown={stopHold} value={r.v} onFocus={r.onFocus} onBlur={r.onBlur} onChange={(e) => r.onChange(e.target.value.replace(/\D/g, ''))} aria-label={`${label} reps`} />
       <button type="button" aria-label={`Remove ${label}`} onClick={() => { tap(); onRemove() }} className="h-9 w-9 flex items-center justify-center text-faint active:text-danger"><Icon.X /></button>
     </div>
   )
@@ -525,7 +563,11 @@ function CardioRow({ set, hint, label, metrics, distanceUnit, onChange, onMenu, 
 function MetricInput({ set, hint, k, distanceUnit, label, onChange }: { set: SetDetail; hint?: LastSet; k: MetricKey; distanceUnit: DistanceUnit; label: string; onChange: (p: SetPatch) => void }) {
   const def = METRIC_BY_KEY[k]
   const placeholder = (hint && metricText(hint, k, distanceUnit)) || def.placeholder
-  const f = useLocalField(metricText(set, k, distanceUnit), (text) => onChange(metricPatch(k, text, distanceUnit, set)))
+  const f = useLocalField(
+    metricText(set, k, distanceUnit),
+    (text) => onChange(metricPatch(k, text, distanceUnit, set)),
+    (text) => metricText({ ...set, ...metricPatch(k, text, distanceUnit, set) }, k, distanceUnit),
+  )
   const clean = (v: string) => (k === 'time' ? v.replace(/[^\d:hms]/gi, '') : v)
   return (
     <input
@@ -533,8 +575,9 @@ function MetricInput({ set, hint, k, distanceUnit, label, onChange }: { set: Set
       inputMode={def.inputMode}
       placeholder={placeholder}
       value={f.v}
-      onFocus={(e) => e.target.select()}
-      onBlur={f.flush}
+      onPointerDown={stopHold}
+      onFocus={f.onFocus}
+      onBlur={f.onBlur}
       onChange={(e) => f.onChange(clean(e.target.value))}
       aria-label={label}
     />

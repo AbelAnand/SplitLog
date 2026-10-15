@@ -3,20 +3,26 @@ import { useNavigate, useNavigationType, useParams } from 'react-router'
 import { useIsMutating, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { useAllSets, useProfile, useWorkout, useWorkouts } from '../api/queries'
-import { deleteWorkout, discardHeld, editorOpen, editsQuiet, saveHeld, useAddExercise, useAddSets, useDeleteSet, useRemoveExercise, useRepeatLast, useReplaceSets, useSessionControls, useUpdateExercise, useUpdateSets, useUpdateWorkout, useUpdateWorkoutExercise, writeHeld } from '../api/mutations'
+import { deleteWorkout, discardHeld, editorOpen, editsQuiet, saveHeld, useAddExercise, useAddSets, useDeleteSet, useRemoveExercise, useReorderExercises, useReorderSets, useRepeatLast, useReplaceSets, useSessionControls, useUpdateExercise, useUpdateSets, useUpdateWorkout, useUpdateWorkoutExercise, writeHeld } from '../api/mutations'
 import { editKey, keys } from '../api/keys'
 import { heldCount, holdWrites, stopHolding, useHeldCount } from '../api/hold'
 import type { WorkoutDetail } from '../api/types'
 import { ExerciseCard, type LastSession } from '../components/ExerciseCard'
 import { ExercisePicker } from '../components/ExercisePicker'
+import { DuplicateSheet } from '../components/DuplicateSheet'
+import { PreviousWorkoutSheet } from '../components/PreviousSheet'
+import { moveItem, summaryOf } from '../api/optimistic'
+import { ShareWorkoutSheet } from '../components/ShareWorkoutSheet'
 import { SessionSheet } from '../components/SessionSheet'
 import { Button, Icon, MenuSheet, Sheet, Spinner } from '../components/ui'
 import { bestByExercise } from '../lib/prs'
+import { loggedSets } from '../lib/sets'
 import { formatClock, formatSessionLength, isLiveSession, useElapsed } from '../lib/duration'
 import { isNative, setBackGesture } from '../lib/native'
 import { getGymSession, loadReminderSettings, startGymSession, stopGymSession } from '../lib/notifications'
 import { tap } from '../lib/haptics'
 import { useArrivals, useArrived, useLeaving } from '../lib/motion'
+import { useReorder } from '../lib/useReorder'
 import { LIMITS } from '../data/limits'
 
 export function WorkoutPage() {
@@ -40,6 +46,10 @@ export function WorkoutPage() {
   const updateSets = useUpdateSets(id)
   const replaceSets = useReplaceSets(id)
   const deleteSet = useDeleteSet(id)
+  const reorderSets = useReorderSets(id)
+  const reorderExercises = useReorderExercises(id)
+  const exerciseIds = useMemo(() => (workout?.exercises ?? []).map((we) => we.id), [workout])
+  const cardOrder = useReorder(exerciseIds, (from, to) => reorderExercises.mutate({ order: moveItem(exerciseIds, from, to) }))
   const repeatLast = useRepeatLast(id)
 
   // A finished workout or a plan opens for editing: every change shows at once but is written
@@ -71,6 +81,9 @@ export function WorkoutPage() {
   const [menu, setMenu] = useState(false)
   const [sessionSheet, setSessionSheet] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [duplicate, setDuplicate] = useState(false)
+  const [repeatPreview, setRepeatPreview] = useState(false)
+  const [share, setShare] = useState(false)
   const [gymActive, setGymActive] = useState(false)
 
   useEffect(() => {
@@ -91,7 +104,11 @@ export function WorkoutPage() {
   const timers = useRef<{ title?: number; notes?: number }>({})
   const debounced = (key: 'title' | 'notes', value: string) => {
     if (timers.current[key]) window.clearTimeout(timers.current[key])
-    timers.current[key] = window.setTimeout(() => updateWorkout.mutate({ [key]: value }), 500)
+    timers.current[key] = window.setTimeout(() => {
+      // Forgotten once it has run, or leaving would write the same value again and count it as unsaved.
+      timers.current[key] = undefined
+      updateWorkout.mutate({ [key]: value })
+    }, 500)
   }
   /** Commit what is still being typed (fields commit a moment after the last keystroke) and let it register. */
   const settleEdits = async () => {
@@ -153,8 +170,9 @@ export function WorkoutPage() {
       if (!candidates.length) continue
       const latestDate = candidates.map((r) => r.date).sort().at(-1)!
       const latestWorkout = candidates.filter((r) => r.date === latestDate).sort((a, b) => b.created_at.localeCompare(a.created_at))[0].workout_id
-      const sets = candidates.filter((r) => r.workout_id === latestWorkout).sort((a, b) => a.set_number - b.set_number)
-      map.set(we.id, { date: format(parseISO(latestDate), 'MMM d'), sets })
+      // Rows left empty last time are not numbers to repeat; a session of only empty rows gives no hint.
+      const sets = loggedSets(candidates.filter((r) => r.workout_id === latestWorkout), we.kind === 'cardio').sort((a, b) => a.set_number - b.set_number)
+      if (sets.length) map.set(we.id, { date: format(parseISO(latestDate), 'MMM d'), sets })
     }
     return map
   }, [allSets, workout, id])
@@ -308,7 +326,7 @@ export function WorkoutPage() {
         <button
           type="button"
           disabled={repeatLast.isPending}
-          onClick={() => repeatLast.mutate({ sourceWorkoutId: previousSameTitle.id, planned: plan })}
+          onClick={() => { tap(); setRepeatPreview(true) }}
           className="press-soft w-full flex items-center gap-3 rounded-[18px] bg-accent-dim border border-accent/30 p-4 mb-4 text-left active:brightness-110 disabled:opacity-60"
         >
           <span className="text-accent"><Icon.Repeat /></span>
@@ -319,11 +337,13 @@ export function WorkoutPage() {
         </button>
       )}
 
-      <div className="flex flex-col">
-        {workout.exercises.map((we) => (
-          <ArrivingCard key={we.id} loaded={arrivals} leaving={leaving.has(we.id)}>
+      <div ref={cardOrder.containerRef} className="flex flex-col">
+        {workout.exercises.map((we, i) => (
+          <ArrivingCard key={we.id} loaded={arrivals} leaving={leaving.has(we.id)} slotRef={cardOrder.slotRef(we.id)} style={cardOrder.styleFor(i)} lifted={cardOrder.lifted === i}>
           <ExerciseCard
             we={we}
+            lifted={cardOrder.lifted === i}
+            onHold={(press) => cardOrder.lift(i, press)}
             unit={unit}
             distanceUnit={distanceUnit}
             prevBestKg={prevBest.get(we.exercise_id) ?? 0}
@@ -333,6 +353,7 @@ export function WorkoutPage() {
             onAddSets={(sets) => addSets.mutate({ workoutExerciseId: we.id, sets })}
             onReplaceSets={(sets) => replaceSets.mutate({ workoutExerciseId: we.id, sets })}
             onDeleteSet={(setId) => deleteSet.mutate(setId)}
+            onReorderSets={(order) => reorderSets.mutate({ workoutExerciseId: we.id, order })}
             onNotes={(n) => updateWorkoutExercise.mutate({ workoutExerciseId: we.id, patch: { notes: n } })}
             onComplete={(done) => updateWorkoutExercise.mutate({ workoutExerciseId: we.id, patch: { completed_at: done ? new Date().toISOString() : null } })}
             onMetrics={(metrics) => updateExercise.mutate({ exerciseId: we.exercise_id, patch: { metrics, track_incline: metrics.includes('incline') } })}
@@ -398,9 +419,18 @@ export function WorkoutPage() {
           ...(live ? [{ label: 'Session & reminders', sub: paused ? 'Paused' : `${formatClock(elapsed)} elapsed`, icon: <Icon.Clock />, onClick: () => setSessionSheet(true) }] : []),
           ...(!plan && !finished && workout.exercises.length > 0 ? [{ label: 'Finish workout', sub: 'Marks it done and stops gym reminders', icon: <Icon.Check />, onClick: finish }] : []),
           ...(finished ? [{ label: 'Resume workout', sub: 'Reopens it; time away is not counted', icon: <Icon.Play />, onClick: reopen }] : []),
+          ...(workout.exercises.length > 0 ? [
+            { label: 'Share', sub: 'As an image, text, or a SplitLog file', icon: <Icon.Share />, onClick: () => setShare(true) },
+            { label: 'Duplicate to days…', sub: 'Plan it again on other days', icon: <Icon.CalendarPlus />, onClick: () => setDuplicate(true) },
+          ] : []),
           { label: plan ? 'Delete plan' : 'Delete workout', icon: <Icon.Trash />, danger: true, onClick: () => setConfirmDelete(true) },
         ]}
       />
+
+      <DuplicateSheet workout={duplicate ? summaryOf(workout) : null} onClose={() => setDuplicate(false)} />
+
+      <PreviousWorkoutSheet workoutId={repeatPreview && previousSameTitle ? previousSameTitle.id : null} onClose={() => setRepeatPreview(false)} plan={plan} unit={unit} distanceUnit={distanceUnit} onRepeat={() => { if (previousSameTitle) repeatLast.mutate({ sourceWorkoutId: previousSameTitle.id, planned: plan }) }} />
+      <ShareWorkoutSheet workoutId={share ? workout.id : null} onClose={() => setShare(false)} />
 
       <Sheet open={confirmLeave} onClose={() => setConfirmLeave(false)} title="Save your changes?">
         <p className="text-muted text-[14px] mb-4">This {plan ? 'plan' : 'workout'} has changes that haven't been saved.</p>
@@ -423,11 +453,11 @@ export function WorkoutPage() {
 }
 
 /** An exercise card: eases in if it was added while you watched, closes up when removed. */
-function ArrivingCard({ loaded, leaving, children }: { loaded: React.RefObject<boolean>; leaving: boolean; children: React.ReactNode }) {
+function ArrivingCard({ loaded, leaving, slotRef, style, lifted, children }: { loaded: React.RefObject<boolean>; leaving: boolean; slotRef?: (el: HTMLElement | null) => void; style?: React.CSSProperties; lifted?: boolean; children: React.ReactNode }) {
   const arrived = useArrived(loaded)
   return (
-    <div className={`collapsible ${leaving ? 'leaving' : ''}`}>
-      <div className={`pb-3 ${arrived ? 'rise-in' : ''}`}>{children}</div>
+    <div ref={slotRef} className={`collapsible ${leaving ? 'leaving' : ''}`}>
+      <div data-keep-keyboard={lifted ? '' : undefined} style={style} className={`pb-3 ${arrived ? 'rise-in' : ''}`}>{children}</div>
     </div>
   )
 }

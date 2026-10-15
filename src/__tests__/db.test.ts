@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { LocalDb, NotFound } from '../db/db'
 import { memoryPersistence } from '../db/persistence'
-import { UnreadableFile, parseBackup, parseCsv, parseCsvRows, readImportFile, serializeBackup, stableId } from '../db/backup'
+import { MAX_FILE_BYTES, UnreadableFile, parseBackup, parseCsv, parseCsvRows, readImportFile, serializeBackup, stableId } from '../db/backup'
 import { setsToCsv } from '../lib/csv'
 import { bestByExercise } from '../lib/prs'
 import type { StoredSet, StoredWorkout, StoredWorkoutExercise } from '../db/types'
@@ -197,9 +197,16 @@ describe('backup and restore', () => {
   it('refuses files that are not SplitLog backups', () => {
     expect(() => readImportFile('hello')).toThrow(UnreadableFile)
     expect(() => readImportFile('{"app":"Other"}')).toThrow(/not a SplitLog backup/)
-    expect(() => readImportFile('{"app":"FitLog","format":2}')).toThrow(/newer version/)
+    expect(() => readImportFile('{"app":"FitLog","format":3}')).toThrow(/newer version/)
     expect(() => readImportFile('{"app":"FitLog","format":1,"sets":{}}')).toThrow(/damaged/)
     expect(() => readImportFile('{not json')).toThrow(UnreadableFile)
+  })
+
+  it('refuses a file over the size limit before trying to read it', () => {
+    const huge = `{"app":"FitLog","format":2,"exportedAt":"${'x'.repeat(MAX_FILE_BYTES)}"}`
+    expect(() => readImportFile(huge)).toThrow(/too large/)
+    // A spreadsheet the same size is refused the same way, by length alone.
+    expect(() => readImportFile(`date,workout,exercise,set\n${' '.repeat(MAX_FILE_BYTES)}`)).toThrow(/too large/)
   })
 
   it('cannot be used to smuggle in oversized or malformed values', async () => {

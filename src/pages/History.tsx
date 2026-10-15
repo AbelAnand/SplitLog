@@ -3,8 +3,10 @@ import { format, isSameMonth, isSameYear, parseISO, startOfMonth } from 'date-fn
 import { useWorkouts } from '../api/queries'
 import { Calendar } from '../components/Calendar'
 import { YearCalendar } from '../components/YearCalendar'
+import { SplitsSheet } from '../components/SplitsSheet'
 import { EmptyState, Icon, PageTitle, Segmented, Spinner } from '../components/ui'
 import { WorkoutRow } from '../components/WorkoutRow'
+import { tap } from '../lib/haptics'
 
 export function HistoryPage() {
   const { data: all = [], isLoading } = useWorkouts()
@@ -13,6 +15,7 @@ export function HistoryPage() {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState<Date | null>(null)
   const [view, setView] = useState<'month' | 'year'>('month')
+  const [splits, setSplits] = useState(false)
 
   const trained = useMemo(() => new Set(workouts.map((w) => w.date)), [workouts])
   const planned = useMemo(() => new Set(plans.map((w) => w.date)), [plans])
@@ -26,13 +29,21 @@ export function HistoryPage() {
 
   const yearWorkouts = useMemo(() => workouts.filter((w) => isSameYear(parseISO(w.date), month)), [workouts, month])
   const yearDays = useMemo(() => new Set(yearWorkouts.map((w) => w.date)).size, [yearWorkouts])
+  // Plans are not workouts until they are started, so the month counts them apart.
+  const monthCounts = useMemo(() => {
+    const done = list.filter((w) => !w.is_plan).length
+    const planned = list.length - done
+    const parts = done || !planned ? [`${done} ${done === 1 ? 'workout' : 'workouts'}`] : []
+    if (planned) parts.push(`${planned} planned`)
+    return parts.join(' · ')
+  }, [list])
   const heading = view === 'year'
     ? `${format(month, 'yyyy')} · ${yearWorkouts.length} ${yearWorkouts.length === 1 ? 'workout' : 'workouts'}${yearDays && yearDays !== yearWorkouts.length ? ` on ${yearDays} days` : ''}`
-    : selected ? format(selected, 'EEEE, MMM d') : `${format(month, 'MMMM')} · ${list.length} ${list.length === 1 ? 'workout' : 'workouts'}`
+    : selected ? format(selected, 'EEEE, MMM d') : `${format(month, 'MMMM')} · ${monthCounts}`
 
   return (
     <>
-      <PageTitle title="History" right={<Segmented value={view} options={[{ value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} onChange={(v) => { setView(v); setSelected(null) }} />} />
+      <PageTitle title="Calendar" right={<Segmented value={view} options={[{ value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} onChange={(v) => { setView(v); setSelected(null) }} />} />
       {isLoading ? (
         <Spinner />
       ) : view === 'year' ? (
@@ -46,6 +57,9 @@ export function HistoryPage() {
           />
           <div className="flex items-baseline justify-between mt-6 mb-3">
             <h2 className="text-[17px] font-semibold">{heading}</h2>
+            <button type="button" className="press-soft inline-flex items-center gap-1 text-[14px] text-accent font-medium" onClick={() => { tap(); setSplits(true) }}>
+              <Icon.Repeat /> Splits
+            </button>
           </div>
           {yearWorkouts.length === 0 && <EmptyState icon={<Icon.Calendar />} title="Nothing this year" body="Pick another year, or start a workout from Home." />}
         </>
@@ -61,17 +75,25 @@ export function HistoryPage() {
           />
           <div className="flex items-baseline justify-between mt-6 mb-3">
             <h2 className="text-[17px] font-semibold">{heading}</h2>
-            {selected && <button type="button" className="text-[14px] text-accent font-medium" onClick={() => setSelected(null)}>Show month</button>}
+            {selected ? (
+              <button type="button" className="text-[14px] text-accent font-medium" onClick={() => setSelected(null)}>Show month</button>
+            ) : (
+              <button type="button" className="press-soft inline-flex items-center gap-1 text-[14px] text-accent font-medium" onClick={() => { tap(); setSplits(true) }}>
+                <Icon.Repeat /> Splits
+              </button>
+            )}
           </div>
           {list.length ? (
             <div className="flex flex-col gap-2">
               {list.map((w) => <WorkoutRow key={w.id} w={w} />)}
+              {selected && <div className="text-center text-[12px] text-faint mt-1">Hold a workout to duplicate or share it</div>}
             </div>
           ) : (
-            <EmptyState icon={<Icon.Calendar />} title={selected ? 'Rest day' : 'Nothing this month'} body={selected ? 'No workout logged on this day.' : 'Pick another month or start a workout from Home.'} />
+            <EmptyState icon={<Icon.Calendar />} title={selected ? 'Rest day' : 'Nothing this month'} body={selected ? 'No workout logged or planned for this day.' : 'Pick another month, start a workout from Home, or apply a split.'} />
           )}
         </>
       )}
+      <SplitsSheet open={splits} onClose={() => setSplits(false)} />
     </>
   )
 }

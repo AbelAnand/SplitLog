@@ -1,5 +1,6 @@
 import type { SetRow } from './prs'
-import { isNative } from './native'
+import { isAndroid, isNative } from './native'
+import { shareTextFileAndroid } from './share-android'
 
 /**
  * One CSV cell. Text that a spreadsheet would run as a formula (it starts with = + - or @) is
@@ -29,6 +30,7 @@ export type ShareResult = 'shared' | 'downloaded' | 'cancelled'
  * Browser: the Web Share API where it can carry files, otherwise a download.
  */
 export async function shareTextFile(filename: string, text: string, type: string): Promise<ShareResult> {
+  if (isAndroid) return shareTextFileAndroid(filename, text)
   if (isNative) {
     const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')])
     const written = await Filesystem.writeFile({ path: filename, data: text, directory: Directory.Cache, encoding: Encoding.UTF8 })
